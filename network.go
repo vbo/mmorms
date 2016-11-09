@@ -138,7 +138,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
                 conn.WriteMessage(websocket.CloseMessage, []byte{})
                 return
             }
-            err := conn.WriteMessage(websocket.TextMessage, message)
+            err := conn.WriteMessage(websocket.BinaryMessage, message)
             if err != nil {
                 return
             }

@@ -8,16 +8,41 @@
             window.onload = function () {
                 if (window["WebSocket"]) {
                     conn = new WebSocket("ws://" + window.location.host + "/ws");
+                    conn.binaryType = "arraybuffer";
                     conn.onclose = function (evt) {
                         console.log("close")
                     };
                     conn.onmessage = function (evt) {
-                        console.log("message", evt)
+                        var messageView = new Int32Array(evt.data);
+                        console.log("message", messageView[0]);
                     };
                 } else {
                     var item = document.createElement("div");
                     body.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+                    return;
                 }
+
+                var inputState = {
+                  moving: 0
+                };
+
+                window.addEventListener("keydown", function(e) {
+                    if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
+                      inputState.moving = (e.code == "ArrowLeft") ? -1 : 1;
+                    }
+                });
+                window.addEventListener("keyup", function(e) {
+                    if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
+                      inputState.moving = 0;
+                    }
+                });
+
+                setInterval(function() { // Sending packets to server
+                  var messageBuffer = new ArrayBuffer(1);
+                  var messageView = new Uint8Array(messageBuffer);
+                  messageView[0] = inputState.moving;
+                  conn.send(messageBuffer);
+                }, 200);
 
                 var WIDTH = 1260;
                 var HEIGHT = 620;
@@ -120,8 +145,6 @@
                     delta = t1 - t0; t0 = t1;
                     //console.log(delta);
                 }
-                setTimeout(function () {
-                }, 10);
             };
         </script>
         <style type="text/css">
