@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>MMOrms</title>
+        <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
+        <script type="text/javascript">
+            var conn;
+            window.onload = function () {
+                if (window["WebSocket"]) {
+                    conn = new WebSocket("ws://" + window.location.host + "/ws");
+                    conn.onclose = function (evt) {
+                        console.log("close")
+                    };
+                    conn.onmessage = function (evt) {
+                        console.log("message", evt)
+                    };
+                } else {
+                    var item = document.createElement("div");
+                    body.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+                }
+
+                var WIDTH = 1260;
+                var HEIGHT = 620;
+                var stage = new createjs.Stage("gameCanvas");
+
+                // TODO: download data from the server
+                var mapBitmapBuffer = new ArrayBuffer(WIDTH * HEIGHT);
+                var mapBitmapByteView = new Uint8Array(mapBitmapBuffer);
+                for (var x = 0; x < WIDTH; x++) {
+                    var groundCurve = 200 + (x/400.0*Math.sin(x/100.0) + 1.2) * 100;
+                    for (var y = 0; y < HEIGHT; y++) {
+                        mapBitmapByteView[x + y*WIDTH] = y < groundCurve ? 0 : 1;
+                    }
+                }
+                
+                // Draw the map bitmap to a canvas to use
+                // it as an alpha mask for map theme image
+
+                // Attempt 1. Draw each pixel through easeljs (~250ms cold)
+                var bmpStart = performance.now();
+                var bgMask = new createjs.Shape();
+                bgMask.graphics.beginFill("rgba(255,0,0,1)");
+                for (var y = 0; y < HEIGHT; y++) {
+                    for (var x = 0; x < 1280; x++) {
+                        if (mapBitmapByteView[x + y*WIDTH] != 0) {
+                            bgMask.graphics.drawRect(x, y, 1, 1);
+                        }
+                    }
+                }
+                bgMask.cache(0, 0, WIDTH, HEIGHT);
+                // we can use bgMask.cacheCanvas for mask
+                var bmpDelta = performance.now() - bmpStart;
+                console.log("BMP drawing took " + bmpDelta + " milliseconds");
+
+                // Attempt 2. Update pixel data and blit back to canvas (~5ms cold)
+                var canvas = document.getElementById('maskCanvas');
+                var ctx = canvas.getContext('2d');
+                var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
+                var data = maskImageData.data;
+                function updateMaskPixelsFromMap(map, pixels) {
+                    for (var p = 0, l = map.length; p < l; p += 4) {
+                        var q = p*4;
+                        pixels[q+3] = map[p] * 255;
+                        pixels[q+7] = map[p+1] * 255;
+                        pixels[q+11] = map[p+2] * 255;
+                        pixels[q+15] = map[p+3] * 255;
+                    }
+                }
+                var bmpStart2 = performance.now();
+                updateMaskPixelsFromMap(mapBitmapByteView, data);
+                ctx.putImageData(maskImageData, 0, 0);
+                var bmpDelta2 = performance.now() - bmpStart2;
+                console.log("BMP batch drawing took " + bmpDelta2 + " milliseconds");
+
+                // Background "theme" image.
+                var bgImage = new createjs.Bitmap("/theme.jpg");
+                bgImage.filters = [
+                    new createjs.AlphaMaskFilter(canvas)
+                ];
+                stage.addChild(bgImage);
+
+                window.explode = 50;
+                stage.on("click", function (evt) {
+                    var bmpStart2 = performance.now();
+                    // Example map update comes
+                    var cx = evt.stageX, cy = evt.stageY, r = window.explode, rs = Math.pow(r, 2);
+                    var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
+                    var ly = Math.min(cy + r, HEIGHT), lx = Math.min(cx + r, WIDTH);
+                    for (var y = sy; y < ly; y++) {
+                        for (var x = sx; x < lx; x++) {
+                            var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);
+                            if (ds < rs) {
+                                mapBitmapByteView[x + y*WIDTH] = 0;
+                            }
+                        }
+                    }
+                    updateMaskPixelsFromMap(mapBitmapByteView, data);
+                    ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
+                    var bmpDelta2 = performance.now() - bmpStart2;
+                    console.log("Explosion update took " + bmpDelta2 + " milliseconds");
+                });
+
+                // Animated object
+                var circle = new createjs.Shape();
+                circle.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 50);
+                circle.x = 100;
+                circle.y = 100;
+                stage.addChild(circle);
+
+                // Render loop.
+                createjs.Ticker.on("tick", tick);
+                createjs.Ticker.setFPS(60);
+                var t0 = performance.now();
+                var delta = 0;
+                function tick(evt) {
+                    circle.x += delta/1000.0*25.0;
+                    bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
+                    stage.update();
+                    var t1 = performance.now();
+                    delta = t1 - t0; t0 = t1;
+                    //console.log(delta);
+                }
+                setTimeout(function () {
+                }, 10);
+            };
+        </script>
+        <style type="text/css">
+        </style>
+    </head>
+<body>
+    <canvas id="gameCanvas" width="1260" height="620"></canvas>
+    <canvas id="maskCanvas" width="1260" height="620" style="display: none"></canvas>
+</body>
+</html>
+
