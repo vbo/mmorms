@@ -5,6 +5,7 @@
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
         <script type="text/javascript">
             var conn;
+            var tank = {x: 200, y: 200};
             window.onload = function () {
                 if (window["WebSocket"]) {
                     conn = new WebSocket("ws://" + window.location.host + "/ws");
@@ -14,6 +15,8 @@
                     };
                     conn.onmessage = function (evt) {
                         var messageView = new Int32Array(evt.data);
+                        tank.x = messageView[0];
+                        tank.y = messageView[1];
                         console.log("message", messageView[0]);
                     };
                 } else {
@@ -127,9 +130,9 @@
 
                 // Animated object
                 var circle = new createjs.Shape();
-                circle.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 50);
-                circle.x = 100;
-                circle.y = 100;
+                circle.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 5);
+                circle.x = tank.x;
+                circle.y = tank.y;
                 stage.addChild(circle);
 
                 // Render loop.
@@ -138,7 +141,7 @@
                 var t0 = performance.now();
                 var delta = 0;
                 function tick(evt) {
-                    circle.x += delta/1000.0*25.0;
+                    circle.x += (tank.x - circle.x)/10; 
                     bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
                     stage.update();
                     var t1 = performance.now();
@@ -150,9 +153,9 @@
         <style type="text/css">
         </style>
     </head>
-<body>
-    <canvas id="gameCanvas" width="1260" height="620"></canvas>
-    <canvas id="maskCanvas" width="1260" height="620" style="display: none"></canvas>
+<body style="overflow:hidden;">
+    <canvas id="gameCanvas" width="1260" height="620" style="overflow: hidden;"></canvas>
+    <canvas id="maskCanvas" width="1260" height="620" style="display: none; overflow: hidden;"></canvas>
 </body>
 </html>
 
