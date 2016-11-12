@@ -28,20 +28,23 @@ const WIDTH = 1260
 const HEIGHT = 620
 
 func gameLoop(net *Network) {
-    clients := make(map[uint64]*Client)
-    tanks := make(map[uint64]*Tank)
+    clients := make(map[uint32]*Client)
+    tanks := make(map[uint32]*Tank)
     var mapBitmapBuffer [WIDTH * HEIGHT + 1]byte
     mapBitmapBuffer[0] = 0 // type of message mapBitmap init
     mapBitmap := mapBitmapBuffer[1:]
+    var stateMessageBuffer [2042]byte
+    stateMessageBuffer[0] = 1 // message type state update
+
     for x := 0; x < WIDTH; x++ {
-      groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 100.0) + 1.2) * 100;
-      for y := 0; y < HEIGHT; y++ {
-        if (float64(y) < groundCurve) {
-          mapBitmap[x + y * WIDTH] = 0;
-        } else {
-          mapBitmap[x + y * WIDTH] = 1;
+        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 100.0) + 1.2) * 100;
+        for y := 0; y < HEIGHT; y++ {
+            if (float64(y) < groundCurve) {
+                mapBitmap[x + y * WIDTH] = 0;
+            } else {
+                mapBitmap[x + y * WIDTH] = 1;
+            }
         }
-      }
     }
     startTime := time.Now()
     for {
@@ -56,53 +59,69 @@ func gameLoop(net *Network) {
             delete(tanks, client.id)
             log.Printf("Client %d disconnected.", client.id)
         case message := <-net.incoming:
-            client, ok := clients[message.from]
-            if !ok {
-                continue // already disconnected, ignore
+            msgNum := len(net.incoming)
+            // log.Printf("Number of messages: %d", msgNum)
+            for {
+                client, ok := clients[message.from]
+                if !ok {
+                    continue // already disconnected, ignore
+                }
+                tanks[client.id].moving = int8(message.data[0])
+                if tanks[client.id].moving != 0 {
+                    log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
+                }
+                if msgNum == 0 {
+                    break
+                }
+                message = <-net.incoming
+                msgNum--
             }
-            tanks[client.id].moving = int8(message.data[0])
-            log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
         default:
         }
         // world simulation 
         newTime := time.Now()
         dtTotal := newTime.Sub(startTime).Seconds()
         for dtTotal > 0.0 {
-          dt := math.Min(0.005, dtTotal)
-          dtTotal = dtTotal - dt
-          for clientId, tank := range tanks {
-              oldX := tank.x
-              oldY := tank.y
-              mapX := uint32(tank.x)
-              mapY := uint32(tank.y)
-              wasOnGround := mapBitmap[mapX + (mapY + 1) * WIDTH] == 1
-              if (!wasOnGround) {
-                tank.y += GRAV_SPEED * dt
-                if (mapBitmap[mapX + uint32(tank.y) * WIDTH] == 1) {
-                  tank.y = oldY
+            dt := math.Min(0.005, dtTotal)
+            dtTotal = dtTotal - dt
+            for _, tank := range tanks {
+                oldX := tank.x
+                oldY := tank.y
+                mapX := uint32(tank.x)
+                mapY := uint32(tank.y)
+                wasOnGround := mapBitmap[mapX + (mapY + 1) * WIDTH] == 1
+                if (!wasOnGround) {
+                    tank.y += GRAV_SPEED * dt
+                    if (mapBitmap[mapX + uint32(tank.y) * WIDTH] == 1) {
+                        tank.y = oldY
+                    }
+                } else {
+                    tank.x += float64(tank.moving) * dt * TANK_SPEED
+                    if mapBitmap[uint32(tank.x) + mapY * WIDTH] == 1 {
+                        for i := uint32(1); i <= 2; i++ {
+                            if mapBitmap[uint32(tank.x) + (mapY - i) * WIDTH] == 0 {
+                                tank.y = float64(mapY - i)
+                                break
+                            }
+                        }
+                        if tank.y == oldY {
+                            tank.x = oldX
+                        }
+                    }
                 }
-              } else {
-                  tank.x += float64(tank.moving) * dt * TANK_SPEED
-                  if mapBitmap[uint32(tank.x) + mapY * WIDTH] == 1 {
-                      for i := uint32(1); i <= 2; i++ {
-                          if mapBitmap[uint32(tank.x) + (mapY - i) * WIDTH] == 0 {
-                              tank.y = float64(mapY - i)
-                              break
-                          }
-                      }
-                      if tank.y == oldY {
-                          tank.x = oldX
-                      }
-                  }
-              }
-              // sending update
-              var messageBuffer [9]byte
-              messageBuffer[0] = 1 // message type state update
-              message := messageBuffer[1:]
-              binary.LittleEndian.PutUint32(message[0:], uint32(tank.x))
-              binary.LittleEndian.PutUint32(message[4:], uint32(tank.y))
-              clients[clientId].outgoing <- messageBuffer[0:]
-          }
+            }
+        }
+        // sending update
+        stateMessageBuffer[1] = byte(len(clients))
+        message := stateMessageBuffer[2:]
+        for clientId, _ := range clients {
+            binary.LittleEndian.PutUint32(message[0:], clientId);
+            binary.LittleEndian.PutUint32(message[4:], uint32(tanks[clientId].x))
+            binary.LittleEndian.PutUint32(message[8:], uint32(tanks[clientId].y))
+            message = message[12:]
+        }
+        for clientId, _ := range clients {
+            clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 12 + 2]
         }
         startTime = newTime
         time.Sleep(20 * time.Millisecond)

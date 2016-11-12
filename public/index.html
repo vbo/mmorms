@@ -6,7 +6,7 @@
         <script type="text/javascript">
             window.onload = function () {
                 var conn;
-                var tank = {x: 200, y: 200};
+                var tanks = {};
                 var mapBitmap;
                 var canvas = document.getElementById('maskCanvas');
                 var ctx = canvas.getContext('2d');
@@ -18,6 +18,23 @@
                 };
                 var stage = new createjs.Stage("gameCanvas");
 
+                function Tank (x, y, clientId) {
+                    this.x = x;
+                    this.y = y;
+                    this.clientId = clientId;
+                    this.shape = new createjs.Shape();
+                    this.shape.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 5);
+                    this.shape.x = this.x;
+                    this.shape.y = this.y;
+                    stage.addChild(this.shape);
+                }
+
+                Tank.prototype.updateState = function(x, y) {
+                    this.x = x;
+                    this.y = y;
+                    this.shape.x = this.x;
+                    this.shape.y = this.y;
+                }
 
                 if (window["WebSocket"]) {
                     conn = new WebSocket("ws://" + window.location.host + "/ws");
@@ -28,13 +45,22 @@
                     conn.onmessage = function (evt) {
                         var messageByteView = new Int8Array(evt.data);
                         if (messageByteView[0] == 0) {
-                          mapBitmap = new Int8Array(evt.data, 1); 
-                          updateMapCanvas();
+                            mapBitmap = new Int8Array(evt.data, 1); 
+                            updateMapCanvas();
                         } else if (messageByteView[0] == 1) {
-                          var messageView = new Uint32Array(evt.data.slice(1));
-                          tank.x = messageView[0];
-                          tank.y = messageView[1];
-                          console.log("message", messageView[0]);
+                            var clientsNum = messageByteView[1];
+                            var messageView = new Uint32Array(evt.data.slice(2));
+                            for (i = 0; i < clientsNum; i++) {
+                                var clientId = messageView[i*3];
+                                var tankClientX = messageView[i*3 + 1];
+                                var tankClientY = messageView[i*3 + 2];
+                                if (!tanks[clientId]) {
+                                    tanks[clientId] =
+                                        new Tank(tankClientX, tankClientY, clientId);
+                                } else {
+                                    tanks[clientId].updateState(tankClientX, tankClientY);
+                                }
+                            }
                         }
                     };
                 } else {
@@ -118,19 +144,10 @@
                     console.log("Explosion update took " + bmpDelta2 + " milliseconds");
                 });
 
-                // Animated object
-                var circle = new createjs.Shape();
-                circle.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 5);
-                circle.x = tank.x;
-                circle.y = tank.y;
-                stage.addChild(circle);
-
                 // Render loop.
                 createjs.Ticker.on("tick", tick);
                 createjs.Ticker.setFPS(60);
                 function tick(evt) {
-                    circle.x = tank.x;
-                    circle.y = tank.y;
                     bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
                     stage.update();
                 }

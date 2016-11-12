@@ -20,7 +20,7 @@ const PING_PERIOD = 1 * time.Second
 // We need just one instance of this for the game.
 type Network struct {
     clientIDMutex sync.Mutex
-    nextClientID uint64
+    nextClientID uint32
     connect chan *Client
     disconnect chan *Client
     incoming chan Message
@@ -32,7 +32,7 @@ func (net *Network) Init() {
     net.incoming = make(chan Message, INCOMING_QUEUE_SIZE)
 }
 
-func (net *Network) GetNewClientID() uint64 {
+func (net *Network) GetNewClientID() uint32 {
     net.clientIDMutex.Lock()
     defer net.clientIDMutex.Unlock()
     newID := net.nextClientID
@@ -43,12 +43,12 @@ func (net *Network) GetNewClientID() uint64 {
 // Represents a single client. Should be allocated in heap
 // for each new connection and hold alive by pointer from Network.
 type Client struct {
-    id uint64
+    id uint32
     outgoing chan []byte
 }
 
 type Message struct {
-    from uint64
+    from uint32
     data []byte
 }
 
@@ -107,7 +107,6 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         delayReadDeadline()
 
         for {
-            log.Println("Blocked on read")
             _, message, err := conn.ReadMessage()
             if err != nil {
                 if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
@@ -115,8 +114,9 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
                 }
                 break
             }
-            log.Printf("Message received: %d %v", client.id, message)
-            net.incoming <- Message{ from: client.id, data: message }
+            //log.Printf("Message received: %d %v", client.id, message)
+            msg := Message{ from: client.id, data: message }
+            net.incoming <-msg
         }
     }()
 
@@ -142,7 +142,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
             if err != nil {
                 return
             }
-            log.Printf("Message sent: %d", client.id)
+            // log.Printf("Message sent to %d", client.id)
         }
     }
 }
