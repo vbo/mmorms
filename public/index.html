@@ -130,6 +130,7 @@
                 createjs.Ticker.setFPS(60);
                 function tick(evt) {
                     circle.x = tank.x;
+                    circle.y = tank.y;
                     bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
                     stage.update();
                 }

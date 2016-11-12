@@ -23,6 +23,7 @@ type Tank struct {
 }
 
 const TANK_SPEED = 10.0
+const GRAV_SPEED = 20.0
 const WIDTH = 1260
 const HEIGHT = 620
 
@@ -47,7 +48,7 @@ func gameLoop(net *Network) {
         select {
         case client := <-net.connect:
             clients[client.id] = client
-            tanks[client.id] = &Tank{x:200, y:200}
+            tanks[client.id] = &Tank{x:900, y:300}
             client.outgoing <- mapBitmapBuffer[0:]
             log.Printf("Client %d connected.", client.id)
         case client := <-net.disconnect:
@@ -61,22 +62,50 @@ func gameLoop(net *Network) {
             }
             tanks[client.id].moving = int8(message.data[0])
             log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
+        default:
         }
         // world simulation 
         newTime := time.Now()
-        dt := newTime.Sub(startTime).Seconds()
-        for clientId, tank := range tanks {
-            tank.x += float64(tank.moving) * dt * TANK_SPEED
-            log.Printf("Client %d is moving %f", clientId, tank.x)
-            var messageBuffer [9]byte
-            messageBuffer[0] = 1 // message type state update
-            message := messageBuffer[1:]
-            binary.LittleEndian.PutUint32(message[0:], uint32(tank.x))
-            binary.LittleEndian.PutUint32(message[4:], uint32(tank.y))
-            log.Println(messageBuffer)
-            clients[clientId].outgoing <- messageBuffer[0:]
+        dtTotal := newTime.Sub(startTime).Seconds()
+        for dtTotal > 0.0 {
+          dt := math.Min(0.005, dtTotal)
+          dtTotal = dtTotal - dt
+          for clientId, tank := range tanks {
+              oldX := tank.x
+              oldY := tank.y
+              mapX := uint32(tank.x)
+              mapY := uint32(tank.y)
+              wasOnGround := mapBitmap[mapX + (mapY + 1) * WIDTH] == 1
+              if (!wasOnGround) {
+                tank.y += GRAV_SPEED * dt
+                if (mapBitmap[mapX + uint32(tank.y) * WIDTH] == 1) {
+                  tank.y = oldY
+                }
+              } else {
+                  tank.x += float64(tank.moving) * dt * TANK_SPEED
+                  if mapBitmap[uint32(tank.x) + mapY * WIDTH] == 1 {
+                      for i := uint32(1); i <= 2; i++ {
+                          if mapBitmap[uint32(tank.x) + (mapY - i) * WIDTH] == 0 {
+                              tank.y = float64(mapY - i)
+                              break
+                          }
+                      }
+                      if tank.y == oldY {
+                          tank.x = oldX
+                      }
+                  }
+              }
+              // sending update
+              var messageBuffer [9]byte
+              messageBuffer[0] = 1 // message type state update
+              message := messageBuffer[1:]
+              binary.LittleEndian.PutUint32(message[0:], uint32(tank.x))
+              binary.LittleEndian.PutUint32(message[4:], uint32(tank.y))
+              clients[clientId].outgoing <- messageBuffer[0:]
+          }
         }
         startTime = newTime
+        time.Sleep(20 * time.Millisecond)
     }
 }
 
