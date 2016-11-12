@@ -142,7 +142,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
             if err != nil {
                 return
             }
-            log.Printf("Message sent: %d %v", client.id, message)
+            log.Printf("Message sent: %d", client.id)
         }
     }
 }

@@ -4,9 +4,21 @@
         <title>MMOrms</title>
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
         <script type="text/javascript">
-            var conn;
-            var tank = {x: 200, y: 200};
             window.onload = function () {
+                var conn;
+                var tank = {x: 200, y: 200};
+                var mapBitmap;
+                var canvas = document.getElementById('maskCanvas');
+                var ctx = canvas.getContext('2d');
+                var WIDTH = 1260;
+                var HEIGHT = 620;
+                var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
+                var inputState = {
+                  moving: 0
+                };
+                var stage = new createjs.Stage("gameCanvas");
+
+
                 if (window["WebSocket"]) {
                     conn = new WebSocket("ws://" + window.location.host + "/ws");
                     conn.binaryType = "arraybuffer";
@@ -14,10 +26,16 @@
                         console.log("close")
                     };
                     conn.onmessage = function (evt) {
-                        var messageView = new Int32Array(evt.data);
-                        tank.x = messageView[0];
-                        tank.y = messageView[1];
-                        console.log("message", messageView[0]);
+                        var messageByteView = new Int8Array(evt.data);
+                        if (messageByteView[0] == 0) {
+                          mapBitmap = new Int8Array(evt.data, 1); 
+                          updateMapCanvas();
+                        } else if (messageByteView[0] == 1) {
+                          var messageView = new Uint32Array(evt.data.slice(1));
+                          tank.x = messageView[0];
+                          tank.y = messageView[1];
+                          console.log("message", messageView[0]);
+                        }
                     };
                 } else {
                     var item = document.createElement("div");
@@ -25,9 +43,6 @@
                     return;
                 }
 
-                var inputState = {
-                  moving: 0
-                };
 
                 window.addEventListener("keydown", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
@@ -47,44 +62,20 @@
                   conn.send(messageBuffer);
                 }, 200);
 
-                var WIDTH = 1260;
-                var HEIGHT = 620;
-                var stage = new createjs.Stage("gameCanvas");
-
-                // TODO: download data from the server
-                var mapBitmapBuffer = new ArrayBuffer(WIDTH * HEIGHT);
-                var mapBitmapByteView = new Uint8Array(mapBitmapBuffer);
-                for (var x = 0; x < WIDTH; x++) {
-                    var groundCurve = 200 + (x/400.0*Math.sin(x/100.0) + 1.2) * 100;
-                    for (var y = 0; y < HEIGHT; y++) {
-                        mapBitmapByteView[x + y*WIDTH] = y < groundCurve ? 0 : 1;
-                    }
-                }
-                
                 // Draw the map bitmap to a canvas to use
                 // it as an alpha mask for map theme image
 
-                // Attempt 1. Draw each pixel through easeljs (~250ms cold)
-                var bmpStart = performance.now();
-                var bgMask = new createjs.Shape();
-                bgMask.graphics.beginFill("rgba(255,0,0,1)");
-                for (var y = 0; y < HEIGHT; y++) {
-                    for (var x = 0; x < 1280; x++) {
-                        if (mapBitmapByteView[x + y*WIDTH] != 0) {
-                            bgMask.graphics.drawRect(x, y, 1, 1);
-                        }
-                    }
-                }
-                bgMask.cache(0, 0, WIDTH, HEIGHT);
-                // we can use bgMask.cacheCanvas for mask
-                var bmpDelta = performance.now() - bmpStart;
-                console.log("BMP drawing took " + bmpDelta + " milliseconds");
+                // Update pixel data and blit back to canvas (~5ms cold)
 
-                // Attempt 2. Update pixel data and blit back to canvas (~5ms cold)
-                var canvas = document.getElementById('maskCanvas');
-                var ctx = canvas.getContext('2d');
-                var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
-                var data = maskImageData.data;
+                function updateMapCanvas() {
+                    var data = maskImageData.data;
+                    var bmpStart2 = performance.now();
+                    updateMaskPixelsFromMap(mapBitmap, data);
+                    ctx.putImageData(maskImageData, 0, 0);
+                    var bmpDelta2 = performance.now() - bmpStart2;
+                    console.log("BMP batch drawing took " + bmpDelta2 + " milliseconds");
+                }
+                
                 function updateMaskPixelsFromMap(map, pixels) {
                     for (var p = 0, l = map.length; p < l; p += 4) {
                         var q = p*4;
@@ -94,11 +85,6 @@
                         pixels[q+15] = map[p+3] * 255;
                     }
                 }
-                var bmpStart2 = performance.now();
-                updateMaskPixelsFromMap(mapBitmapByteView, data);
-                ctx.putImageData(maskImageData, 0, 0);
-                var bmpDelta2 = performance.now() - bmpStart2;
-                console.log("BMP batch drawing took " + bmpDelta2 + " milliseconds");
 
                 // Background "theme" image.
                 var bgImage = new createjs.Bitmap("/theme.jpg");
@@ -109,20 +95,24 @@
 
                 window.explode = 50;
                 stage.on("click", function (evt) {
+                    var data = maskImageData.data;
                     var bmpStart2 = performance.now();
                     // Example map update comes
-                    var cx = evt.stageX, cy = evt.stageY, r = window.explode, rs = Math.pow(r, 2);
+                    var cx = evt.stageX,
+                        cy = evt.stageY,
+                        r = window.explode,
+                        rs = Math.pow(r, 2);
                     var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
                     var ly = Math.min(cy + r, HEIGHT), lx = Math.min(cx + r, WIDTH);
                     for (var y = sy; y < ly; y++) {
                         for (var x = sx; x < lx; x++) {
                             var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);
                             if (ds < rs) {
-                                mapBitmapByteView[x + y*WIDTH] = 0;
+                                mapBitmap[x + y*WIDTH] = 0;
                             }
                         }
                     }
-                    updateMaskPixelsFromMap(mapBitmapByteView, data);
+                    updateMaskPixelsFromMap(mapBitmap, data);
                     ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
                     var bmpDelta2 = performance.now() - bmpStart2;
                     console.log("Explosion update took " + bmpDelta2 + " milliseconds");
@@ -138,15 +128,10 @@
                 // Render loop.
                 createjs.Ticker.on("tick", tick);
                 createjs.Ticker.setFPS(60);
-                var t0 = performance.now();
-                var delta = 0;
                 function tick(evt) {
-                    circle.x += (tank.x - circle.x)/10; 
+                    circle.x = tank.x;
                     bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
                     stage.update();
-                    var t1 = performance.now();
-                    delta = t1 - t0; t0 = t1;
-                    //console.log(delta);
                 }
             };
         </script>

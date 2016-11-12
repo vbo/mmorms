@@ -1,10 +1,11 @@
 package main
 
 import (
-	"flag"
-	"log"
-  "time"
+  "flag"
+  "log"
   "encoding/binary"
+  "math"
+  "time"
 )
 
 // game design
@@ -22,16 +23,32 @@ type Tank struct {
 }
 
 const TANK_SPEED = 10.0
+const WIDTH = 1260
+const HEIGHT = 620
 
 func gameLoop(net *Network) {
     clients := make(map[uint64]*Client)
     tanks := make(map[uint64]*Tank)
+    var mapBitmapBuffer [WIDTH * HEIGHT + 1]byte
+    mapBitmapBuffer[0] = 0 // type of message mapBitmap init
+    mapBitmap := mapBitmapBuffer[1:]
+    for x := 0; x < WIDTH; x++ {
+      groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 100.0) + 1.2) * 100;
+      for y := 0; y < HEIGHT; y++ {
+        if (float64(y) < groundCurve) {
+          mapBitmap[x + y * WIDTH] = 0;
+        } else {
+          mapBitmap[x + y * WIDTH] = 1;
+        }
+      }
+    }
     startTime := time.Now()
     for {
         select {
         case client := <-net.connect:
             clients[client.id] = client
             tanks[client.id] = &Tank{x:200, y:200}
+            client.outgoing <- mapBitmapBuffer[0:]
             log.Printf("Client %d connected.", client.id)
         case client := <-net.disconnect:
             delete(clients, client.id)
@@ -51,10 +68,13 @@ func gameLoop(net *Network) {
         for clientId, tank := range tanks {
             tank.x += float64(tank.moving) * dt * TANK_SPEED
             log.Printf("Client %d is moving %f", clientId, tank.x)
-            bs := make([]byte, 8)
-            binary.LittleEndian.PutUint32(bs, uint32(tank.x))
-            binary.LittleEndian.PutUint32(bs[4:], uint32(tank.y))
-            clients[clientId].outgoing <- bs
+            var messageBuffer [9]byte
+            messageBuffer[0] = 1 // message type state update
+            message := messageBuffer[1:]
+            binary.LittleEndian.PutUint32(message[0:], uint32(tank.x))
+            binary.LittleEndian.PutUint32(message[4:], uint32(tank.y))
+            log.Println(messageBuffer)
+            clients[clientId].outgoing <- messageBuffer[0:]
         }
         startTime = newTime
     }
