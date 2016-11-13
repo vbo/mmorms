@@ -63,21 +63,27 @@ func gameLoop(net *Network) {
         }
     }
     startTime := time.Now()
+    dtTotal := time.Duration(0)
     curTick := uint64(0)
-    lastDtTotal := 0.0
-    maxDtTotal := 0.0
-    var memStats runtime.MemStats
+    lastDtTotal := time.Duration(0)
+    maxDtTotal := time.Duration(0)
+    var memStats, prevMemStats runtime.MemStats
     for {
-        tickStartTime := time.Now()
-        if curTick % 500 == 0 {
-            var maxPauseNs uint64 = 0
+        if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
-            for _, p := range memStats.PauseNs { if p > maxPauseNs { maxPauseNs = p } }
-            log.Printf("STAT:tick=%d,dt=%f(%f max),gocnt=%d,alloc=(%f|%d)",
+            var numGCDiff = memStats.NumGC - prevMemStats.NumGC
+            var numMallocs =  memStats.Mallocs - prevMemStats.Mallocs
+            var maxPauseNs uint64 = 0
+            for i := memStats.NumGC; i > prevMemStats.NumGC; i-- {
+                pause := memStats.PauseNs[(i+255)%256] // circular buffer
+                if pause > maxPauseNs { maxPauseNs = pause }
+            }
+            log.Printf("STAT:tick=%d,dt=%s(%s max),gocnt=%d,alloc=(%d mlcs,%d ngc,%f max,%d kb live)",
                 curTick, lastDtTotal, maxDtTotal, runtime.NumGoroutine(),
-                float64(maxPauseNs)/1000000, memStats.Alloc / 1024)
+                numMallocs, numGCDiff, float64(maxPauseNs)/1000000, memStats.Alloc / 1024)
             //log.Println(memStats)
             maxDtTotal = 0.0
+            prevMemStats = memStats
         }
         select {
         case client := <-net.connect:
@@ -136,13 +142,10 @@ func gameLoop(net *Network) {
         default:
         }
         // world simulation 
-        newTime := time.Now()
-        dtTotal := newTime.Sub(startTime).Seconds()
-        lastDtTotal = dtTotal
-        if lastDtTotal > maxDtTotal { maxDtTotal = lastDtTotal }
-        for dtTotal > 0.0 {
-            dt := math.Min(0.005, dtTotal)
-            dtTotal = dtTotal - dt
+        dtTotalSeconds := dtTotal.Seconds()
+        for dtTotalSeconds > 0.0 {
+            dt := math.Min(0.005, dtTotalSeconds)
+            dtTotalSeconds = dtTotalSeconds - dt
             for _, tank := range tanks {
                 oldX := tank.x
                 oldY := tank.y
@@ -194,7 +197,6 @@ func gameLoop(net *Network) {
                 }
             }
         }
-
         // sending updates for tanks
         {
             // TODO:(vbo): scratch memory arena reuse ideas:
@@ -240,12 +242,15 @@ func gameLoop(net *Network) {
             }
         }
 
+        newTime := time.Now()
+        dtTotal = newTime.Sub(startTime)
+        lastDtTotal = dtTotal
+        if lastDtTotal > maxDtTotal { maxDtTotal = lastDtTotal }
         startTime = newTime
         curTick++
 
         // TODO: improve sleep precision
-        timeInTickSoFar := time.Now().Sub(tickStartTime)
-        time.Sleep(TARGET_TICK_TIME - timeInTickSoFar)
+        time.Sleep(TARGET_TICK_TIME - dtTotal)
     }
 }
 
