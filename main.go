@@ -28,10 +28,13 @@ type Bullet struct {
     vx, vy float64
 }
 
-const BULLET_SPEED = 40.0
-const TANK_SPEED = 10.0
-const GRAV_SPEED = 20.0
-const GRAV_ACC = 5.0
+const BULLET_RAD = 30
+const BULLET_SPEED = 80
+const GRAV_ACC = 5
+const GRAV_SPEED = 20
+const TANK_RAD = 15
+const TANK_SPEED = 10
+
 const WIDTH = 1260
 const HEIGHT = 620
 
@@ -66,7 +69,8 @@ func gameLoop(net *Network) {
             client.outgoing <- mapBitmapBuffer[0:]
             log.Printf("Client %d connected.", client.id)
         case client := <-net.disconnect:
-            broadcastDeath(client.id, clients)
+            broadcastDeath(client.id, tanks[client.id].x, tanks[client.id].y, TANK_RAD, clients)
+            explodeAt(tanks[client.id].x, tanks[client.id].y, TANK_RAD, mapBitmap)
             delete(clients, client.id)
             delete(tanks, client.id)
             log.Printf("Client %d disconnected.", client.id)
@@ -116,20 +120,18 @@ func gameLoop(net *Network) {
             for _, tank := range tanks {
                 oldX := tank.x
                 oldY := tank.y
-                mapX := uint32(tank.x)
-                mapY := uint32(tank.y)
-                wasOnGround := mapBitmap[mapX + (mapY + 1) * WIDTH] == 1
-                if (!wasOnGround) {
+                wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
+                if !wasOnGround {
                     tank.y += GRAV_SPEED * dt
-                    if (mapBitmap[mapX + uint32(tank.y) * WIDTH] == 1) {
+                    if (isGroundF(oldX, tank.y, mapBitmap)) {
                         tank.y = oldY
                     }
                 } else {
                     tank.x += float64(tank.moving) * dt * TANK_SPEED
-                    if mapBitmap[uint32(tank.x) + mapY * WIDTH] == 1 {
+                    if isGroundF(tank.x, oldY, mapBitmap) {
                         for i := uint32(1); i <= 2; i++ {
-                            if mapBitmap[uint32(tank.x) + (mapY - i) * WIDTH] == 0 {
-                                tank.y = float64(mapY - i)
+                            if !isGroundF(tank.x, oldY - float64(i), mapBitmap) {
+                                tank.y = oldY - float64(i)
                                 break
                             }
                         }
@@ -145,9 +147,9 @@ func gameLoop(net *Network) {
                 bullet.x += bullet.vx * dt
                 bullet.y += bullet.vy * dt
                 bullet.vy += GRAV_ACC * dt
-                if (mapBitmap[uint32(bullet.x) + uint32(bullet.y) * WIDTH] == 1) {
-                    // explode & remove bullet
-                    broadcastDeath(bullet.id, clients)
+                if isGroundF(bullet.x, bullet.y, mapBitmap) {
+                    broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
+                    explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap)
                     log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                     bullets[bulletIndex] = bullets[len(bullets) - 1]
                     bullets = bullets[:len(bullets) - 1]
@@ -196,15 +198,48 @@ func gameLoop(net *Network) {
     }
 }
 
-func broadcastDeath(id uint32, clients map[uint32]*Client) {
-    var buffer [5]byte
+func broadcastDeath(id uint32, x float64, y float64, radius uint32,
+                    clients map[uint32]*Client) {
+    var buffer [17]byte
     buffer[0] = 4 // message type death 
     message := buffer[1:]
     binary.LittleEndian.PutUint32(message[0:], id);
+    binary.LittleEndian.PutUint32(message[4:], uint32(x));
+    binary.LittleEndian.PutUint32(message[8:], uint32(y));
+    binary.LittleEndian.PutUint32(message[12:], radius);
     for clientId, _ := range clients {
         clients[clientId].outgoing <- buffer[0:]
     }
     log.Printf("Object %d died bravely", id)
+}
+
+func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte) {
+    cx := uint32(cxf)
+    cy := uint32(cyf)
+    rs := r*r
+    sx := maxUint32(cx - r, 0)
+    sy := maxUint32(cy - r, 0)
+    ly := minUint32(cy + r, HEIGHT)
+    lx := minUint32(cx + r, WIDTH)
+    for y := sy; y < ly; y++ {
+        for x := sx; x < lx; x++ {
+            ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
+            if ds < rs {
+                mapBitmap[x + y * WIDTH] = 0;
+            }
+        }
+    }
+}
+
+func isGroundF(x float64, y float64, mapBitmap []byte) bool {
+    mapX := uint32(x)
+    mapY := uint32(y)
+    return isGroundUi(mapX, mapY, mapBitmap) 
+}
+
+func isGroundUi(x uint32, y uint32, mapBitmap []byte) bool {
+    index := x + y * WIDTH
+    return index < 0 || int(index) > len(mapBitmap) || mapBitmap[index] == 1
 }
 
 func main() {
@@ -222,3 +257,16 @@ func main() {
     }
 }
 
+func maxUint32(a uint32, b uint32) uint32 {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+func minUint32(a uint32, b uint32) uint32 {
+    if a < b {
+        return a
+    }
+    return b
+}

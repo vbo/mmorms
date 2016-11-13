@@ -108,8 +108,15 @@
                             }
                             break;
                         case 4: // death message
-                            deadId = (new Uint32Array(evt.data.slice(1)))[0];
-                            console.log(deadId + " died");
+                            var messageData = new Uint32Array(evt.data.slice(1));
+                            var deadId = messageData[0],
+                                x = messageData[1],
+                                y = messageData[2],
+                                radius = messageData[3];
+                            console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
+                            if (radius > 0) {
+                                explodeAt(x, y, radius);
+                            }
                             if (tanks.hasOwnProperty(deadId)) {
                                 stage.removeChild(tanks[deadId].shape);
                                 delete tanks[deadId];
@@ -195,30 +202,26 @@
                 ];
                 stage.addChild(bgImage);
 
-                // window.explode = 50;
-                // stage.on("click", function (evt) {
-                //     var data = maskImageData.data;
-                //     var bmpStart2 = performance.now();
-                //     // Example map update comes
-                //     var cx = evt.stageX,
-                //         cy = evt.stageY,
-                //         r = window.explode,
-                //         rs = Math.pow(r, 2);
-                //     var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
-                //     var ly = Math.min(cy + r, HEIGHT), lx = Math.min(cx + r, WIDTH);
-                //     for (var y = sy; y < ly; y++) {
-                //         for (var x = sx; x < lx; x++) {
-                //             var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);
-                //             if (ds < rs) {
-                //                 mapBitmap[x + y*WIDTH] = 0;
-                //             }
-                //         }
-                //     }
-                //     updateMaskPixelsFromMap(mapBitmap, data);
-                //     ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
-                //     var bmpDelta2 = performance.now() - bmpStart2;
-                //     console.log("Explosion update took " + bmpDelta2 + " milliseconds");
-                // });
+                function explodeAt(cx, cy, r) {
+                    var data = maskImageData.data;
+                    var bmpStart2 = performance.now();
+                    // Example map update comes
+                    var rs = Math.pow(r, 2);
+                    var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
+                    var ly = Math.min(cy + r, HEIGHT), lx = Math.min(cx + r, WIDTH);
+                    for (var y = sy; y < ly; y++) {
+                        for (var x = sx; x < lx; x++) {
+                            var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);
+                            if (ds < rs) {
+                                mapBitmap[x + y*WIDTH] = 0;
+                            }
+                        }
+                    }
+                    updateMaskPixelsFromMap(mapBitmap, data);
+                    ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
+                    var bmpDelta2 = performance.now() - bmpStart2;
+                    console.log("Explosion update took " + bmpDelta2 + " milliseconds");
+                }
 
                 // Render loop.
                 createjs.Ticker.on("tick", tick);
