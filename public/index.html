@@ -28,10 +28,20 @@
                     this.x = x;
                     this.y = y;
                     this.clientId = clientId;
-                    this.shape = new createjs.Shape();
-                    this.shape.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 15);
+                    this.shape = new createjs.Container();
+                    this.shape.regX = 0;
+                    this.shape.regY = 25;
+                    //this.shape.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 15);
                     this.shape.x = this.x;
                     this.shape.y = this.y;
+                    this.gun = new createjs.Bitmap("/tank6-gun.png");
+                    this.body = new createjs.Bitmap("/tank6-body.png");
+                    this.shape.addChild(this.gun);
+                    this.shape.addChild(this.body);
+                    this.gun.regX = 46;
+                    this.gun.regY = 25;
+                    this.body.regX = 47;
+                    this.body.regY = 25;
                     stage.addChild(this.shape);
                 }
 
@@ -137,6 +147,9 @@
                 window.addEventListener("keydown", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = (e.code == "ArrowLeft") ? -1 : 1;
+                    }
+                    if (e.code == "ArrowUp" || e.code == "ArrowDown") {
+                        me().gun.rotation += (e.code == "ArrowUp") ? -1 : 1;
                     }
                 });
                 window.addEventListener("keyup", function(e) {
