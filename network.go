@@ -69,6 +69,17 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+    // TODO(vbo): implement clients pool
+    //  - Preallocate a pool of clients for the net.
+    //  - Get new client for connection from the pool (with lock).
+    //  - Communicate client to the game loop with offsetptr (gc-friendly).
+    //  - R/W goroutines use client out and net in channels normally.
+    //  - On disconnect force-stop using it's out channel and
+    //    communicate disconnected client to the game loop.
+    //  - If game loop wants to kick the client it needs to communicate
+    //    the intention explicitly (e.g. through outgoing channel).
+    //  - Return to pool happens in game loop when handling disconnect msg (with lock).
+    //    Don't forget to drain the channel and reset all variables in the client!
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
@@ -99,6 +110,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     // 1. The ReadMessage call blocks, so I don't see other choice.
     // 2. It is allowed to call Read and Write concurrently so why not?
     go func () {
+        // TODO(vbo): make sure this goroutine exits correctly on disconnect.
         // Set the read deadline after which a read becomes timed out,
         // the websocket connection state is corrupt and all future reads will return an error.
         // Deadline will be delayed each time we receive a websocket PONG message.

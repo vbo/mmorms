@@ -7,20 +7,13 @@ import (
   "math/rand"
   "math"
   "time"
+  "runtime"
 )
-
-// game design
-//  - Server authoritative.
-//  - Moving, shooting (up-down to control aim?)
-//  - Input from player:
-//     - Move(-1..1), Angle(0..255), Shoot(0..16)
-//  - Output from server:
-//     - BMP on game load (todo: dynamic)
-//     - T0, 16xPlayer: ID, X,Y in pixels, Shoot+Angle+T0
 
 type Tank struct {
     x, y float64
     moving int8
+    hp uint32
 }
 
 type Bullet struct {
@@ -29,6 +22,8 @@ type Bullet struct {
     vx, vy float64
 }
 
+const EXPLOSION_DMG = 100
+const EXPLOSION_DMG_FALLOFF = 2
 const BULLET_RAD = 30
 const BULLET_SPEED = 80
 const GRAV_ACC = 5
@@ -38,6 +33,16 @@ const TANK_SPEED = 10
 
 const WIDTH = 1260
 const HEIGHT = 620
+
+const TARGET_TICK_TIME = 20 * time.Millisecond
+
+func NewTank() *Tank {
+    return &Tank{
+        x: float64(rand.Intn(WIDTH)),
+        y: 20,
+        hp: 300,
+    }
+}
 
 func gameLoop(net *Network) {
     clients := make(map[uint32]*Client)
@@ -58,11 +63,26 @@ func gameLoop(net *Network) {
         }
     }
     startTime := time.Now()
+    curTick := uint64(0)
+    lastDtTotal := 0.0
+    maxDtTotal := 0.0
+    var memStats runtime.MemStats
     for {
+        tickStartTime := time.Now()
+        if curTick % 500 == 0 {
+            var maxPauseNs uint64 = 0
+            runtime.ReadMemStats(&memStats)
+            for _, p := range memStats.PauseNs { if p > maxPauseNs { maxPauseNs = p } }
+            log.Printf("STAT:tick=%d,dt=%f(%f max),gocnt=%d,alloc=(%f|%d)",
+                curTick, lastDtTotal, maxDtTotal, runtime.NumGoroutine(),
+                float64(maxPauseNs)/1000000, memStats.Alloc / 1024)
+            //log.Println(memStats)
+            maxDtTotal = 0.0
+        }
         select {
         case client := <-net.connect:
             clients[client.id] = client
-            tanks[client.id] = &Tank{x: float64(rand.Intn(WIDTH)), y:1}
+            tanks[client.id] = NewTank()
             var greetingMsg [5]byte
             greetingMsg[0] = 2
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
@@ -70,10 +90,12 @@ func gameLoop(net *Network) {
             client.outgoing <- mapBitmapBuffer[0:]
             log.Printf("Client %d connected.", client.id)
         case client := <-net.disconnect:
-            broadcastDeath(client.id, tanks[client.id].x, tanks[client.id].y, TANK_RAD, clients)
-            explodeAt(tanks[client.id].x, tanks[client.id].y, TANK_RAD, mapBitmap)
+            tank := tanks[client.id]
+            broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
+            explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
             delete(clients, client.id)
             delete(tanks, client.id)
+            close(client.outgoing)
             log.Printf("Client %d disconnected.", client.id)
         case message := <-net.incoming:
             msgNum := len(net.incoming)
@@ -101,7 +123,8 @@ func gameLoop(net *Network) {
                             x: tanks[client.id].x,
                             y: tanks[client.id].y,
                             vx: vx,
-                            vy: vy })
+                            vy: vy,
+                        })
                         log.Printf("New wild bullet created %d", id)
                 }
                 if msgNum == 0 {
@@ -115,6 +138,8 @@ func gameLoop(net *Network) {
         // world simulation 
         newTime := time.Now()
         dtTotal := newTime.Sub(startTime).Seconds()
+        lastDtTotal = dtTotal
+        if lastDtTotal > maxDtTotal { maxDtTotal = lastDtTotal }
         for dtTotal > 0.0 {
             dt := math.Min(0.005, dtTotal)
             dtTotal = dtTotal - dt
@@ -123,6 +148,8 @@ func gameLoop(net *Network) {
                 oldY := tank.y
                 wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
                 if !wasOnGround {
+                    // TODO(vbo): fix slow hill descent by falling
+                    // instantly for no more than 2 pixels
                     tank.y += GRAV_SPEED * dt
                     if (isGroundF(oldX, tank.y, mapBitmap)) {
                         tank.y = oldY
@@ -150,7 +177,7 @@ func gameLoop(net *Network) {
                 bullet.vy += GRAV_ACC * dt
                 if isGroundF(bullet.x, bullet.y, mapBitmap) {
                     broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
-                    explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap)
+                    explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap, tanks)
                     log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                     bullets[bulletIndex] = bullets[len(bullets) - 1]
                     bullets = bullets[:len(bullets) - 1]
@@ -158,10 +185,29 @@ func gameLoop(net *Network) {
                     bulletIndex++
                 }
             }
+            // Explode and respawn dead tanks.
+            for clientID, tank := range tanks {
+                if tank.hp == 0 {
+                    broadcastDeath(clientID, tank.x, tank.y, TANK_RAD, clients)
+                    explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+                    tanks[clientID] = NewTank()
+                }
+            }
         }
 
         // sending updates for tanks
         {
+            // TODO:(vbo): scratch memory arena reuse ideas:
+            //  - Under normal load we expect any send operation
+            //    to be finished after no more than N server ticks.
+            //  - Thus instead of alocating scratch memory arena for each
+            //    tick's messages we can preallocate an N-sized ring
+            //    buffer of arenas and use the next entry each tick.
+            //  - Panic situation can be discovered in R/W goroutines
+            //    by comparing deadline tick (curTick+N) passed alongside
+            //    the data pointer with the actual curTick at the send time.
+            //  - A different solution is to preallocate a pool
+            //    of reference counted arenas.
             var stateMessageBuffer [2042]byte
             stateMessageBuffer[0] = 1 // message type state update
             stateMessageBuffer[1] = byte(len(clients))
@@ -195,7 +241,11 @@ func gameLoop(net *Network) {
         }
 
         startTime = newTime
-        time.Sleep(20 * time.Millisecond)
+        curTick++
+
+        // TODO: improve sleep precision
+        timeInTickSoFar := time.Now().Sub(tickStartTime)
+        time.Sleep(TARGET_TICK_TIME - timeInTickSoFar)
     }
 }
 
@@ -214,7 +264,8 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     log.Printf("Object %d died bravely", id)
 }
 
-func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte) {
+func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte, tanks map[uint32]*Tank) {
+    // Destroy terrain
     cx := uint32(cxf)
     cy := uint32(cyf)
     rs := r*r
@@ -228,6 +279,18 @@ func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte) {
             if ds < rs {
                 mapBitmap[x + y * WIDTH] = 0;
             }
+        }
+    }
+    // Hit tanks
+    for tankID, tank := range tanks {
+        dx := uint32(tank.x) - cx
+        dy := uint32(tank.y) - cy
+        ds := dx*dx + dy*dy
+        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
+        if dmg > 0 {
+            realDmg := uint32(math.Min(dmg, float64(tank.hp)))
+            tanks[tankID].hp -= realDmg
+            log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }
     }
 }
