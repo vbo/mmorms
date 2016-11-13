@@ -4,6 +4,7 @@ import (
   "flag"
   "log"
   "encoding/binary"
+  "math/rand"
   "math"
   "time"
 )
@@ -61,7 +62,7 @@ func gameLoop(net *Network) {
         select {
         case client := <-net.connect:
             clients[client.id] = client
-            tanks[client.id] = &Tank{x:900, y:300}
+            tanks[client.id] = &Tank{x: float64(rand.Intn(WIDTH)), y:1}
             var greetingMsg [5]byte
             greetingMsg[0] = 2
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
@@ -234,7 +235,7 @@ func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte) {
 func isGroundF(x float64, y float64, mapBitmap []byte) bool {
     mapX := uint32(x)
     mapY := uint32(y)
-    return isGroundUi(mapX, mapY, mapBitmap) 
+    return isGroundUi(mapX, mapY, mapBitmap)
 }
 
 func isGroundUi(x uint32, y uint32, mapBitmap []byte) bool {
