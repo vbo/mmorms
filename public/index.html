@@ -164,7 +164,9 @@
                   var messageView = new Uint8Array(messageBuffer);
                   messageView[0] = 0; // 0 - moving type of message
                   messageView[1] = inputState.moving;
-                  conn.send(messageBuffer);
+                  if (conn.readyState === conn.OPEN) {
+                      conn.send(messageBuffer);
+                  }
                 }, 200);
 
                 // Draw the map bitmap to a canvas to use
