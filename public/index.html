@@ -68,10 +68,12 @@
                     };
                     conn.onmessage = function (evt) {
                         var messageByteView = new Int8Array(evt.data);
-                        if (messageByteView[0] == 0) {
+                        switch (messageByteView[0]) {
+                        case 0: // map update
                             mapBitmap = new Int8Array(evt.data, 1); 
                             updateMapCanvas();
-                        } else if (messageByteView[0] == 1) {
+                            break;
+                        case 1: // state update
                             var clientsNum = messageByteView[1];
                             var messageView = new Uint32Array(evt.data.slice(2));
                             for (i = 0; i < clientsNum; i++) {
@@ -85,10 +87,12 @@
                                     tanks[clientId].updateState(tankClientX, tankClientY);
                                 }
                             }
-                        } else if (messageByteView[0] == 2) {
+                            break;
+                        case 2: // greetings message
                             myClientId = (new Uint32Array(evt.data.slice(1)))[0];
                             console.log("I am " + myClientId);
-                        } else if (messageByteView[0] == 3) {
+                            break;
+                        case 3: // bullets update
                             var bulletsNum = messageByteView[1];
                             var messageView = new Uint32Array(evt.data.slice(2));
                             for (i = 0; i < bulletsNum; i++) {
@@ -101,6 +105,18 @@
                                 } else {
                                     bullets[id].updateState(bulletX, bulletY);
                                 }
+                            }
+                            break;
+                        case 4: // death message
+                            deadId = (new Uint32Array(evt.data.slice(1)))[0];
+                            console.log(deadId + " died");
+                            if (tanks.hasOwnProperty(deadId)) {
+                                stage.removeChild(tanks[deadId].shape);
+                                delete tanks[deadId];
+                            }
+                            if (bullets.hasOwnProperty(deadId)) {
+                                stage.removeChild(bullets[deadId].shape);
+                                delete bullets[deadId];
                             }
                         }
                     };

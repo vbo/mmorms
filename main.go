@@ -28,7 +28,7 @@ type Bullet struct {
     vx, vy float64
 }
 
-const BULLET_SPEED = 30.0
+const BULLET_SPEED = 40.0
 const TANK_SPEED = 10.0
 const GRAV_SPEED = 20.0
 const GRAV_ACC = 5.0
@@ -66,6 +66,7 @@ func gameLoop(net *Network) {
             client.outgoing <- mapBitmapBuffer[0:]
             log.Printf("Client %d connected.", client.id)
         case client := <-net.disconnect:
+            broadcastDeath(client.id, clients)
             delete(clients, client.id)
             delete(tanks, client.id)
             log.Printf("Client %d disconnected.", client.id)
@@ -86,16 +87,17 @@ func gameLoop(net *Network) {
                     case 1: // shooting
                         aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                         aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
-                        log.Printf("Aim %v %v", aimX, aimY)
                         aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
                         vx := BULLET_SPEED * aimX / aimLen
                         vy := BULLET_SPEED * aimY / aimLen
+                        id := net.GetNewObjectId()
                         bullets = append(bullets, Bullet{
-                            id: net.GetNewObjectId(),
+                            id: id,
                             x: tanks[client.id].x,
                             y: tanks[client.id].y,
                             vx: vx,
                             vy: vy })
+                        log.Printf("New wild bullet created %d", id)
                 }
                 if msgNum == 0 {
                     break
@@ -145,9 +147,10 @@ func gameLoop(net *Network) {
                 bullet.vy += GRAV_ACC * dt
                 if (mapBitmap[uint32(bullet.x) + uint32(bullet.y) * WIDTH] == 1) {
                     // explode & remove bullet
+                    broadcastDeath(bullet.id, clients)
+                    log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                     bullets[bulletIndex] = bullets[len(bullets) - 1]
                     bullets = bullets[:len(bullets) - 1]
-                    log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 } else {
                     bulletIndex++
                 }
@@ -191,6 +194,17 @@ func gameLoop(net *Network) {
         startTime = newTime
         time.Sleep(20 * time.Millisecond)
     }
+}
+
+func broadcastDeath(id uint32, clients map[uint32]*Client) {
+    var buffer [5]byte
+    buffer[0] = 4 // message type death 
+    message := buffer[1:]
+    binary.LittleEndian.PutUint32(message[0:], id);
+    for clientId, _ := range clients {
+        clients[clientId].outgoing <- buffer[0:]
+    }
+    log.Printf("Object %d died bravely", id)
 }
 
 func main() {
