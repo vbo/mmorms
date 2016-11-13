@@ -19,8 +19,8 @@ const PING_PERIOD = 1 * time.Second
 // Represents a capability to connect and talk to clients.
 // We need just one instance of this for the game.
 type Network struct {
-    clientIDMutex sync.Mutex
-    nextClientID uint32
+    objectIDMutex sync.Mutex
+    nextObjectID uint32
     connect chan *Client
     disconnect chan *Client
     incoming chan Message
@@ -32,11 +32,11 @@ func (net *Network) Init() {
     net.incoming = make(chan Message, INCOMING_QUEUE_SIZE)
 }
 
-func (net *Network) GetNewClientID() uint32 {
-    net.clientIDMutex.Lock()
-    defer net.clientIDMutex.Unlock()
-    newID := net.nextClientID
-    net.nextClientID++
+func (net *Network) GetNewObjectId() uint32 {
+    net.objectIDMutex.Lock()
+    defer net.objectIDMutex.Unlock()
+    newID := net.nextObjectID
+    net.nextObjectID++
     return newID
 }
 
@@ -70,7 +70,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
 	}
 
     client := &Client{
-        id: net.GetNewClientID(),
+        id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
     }
 
