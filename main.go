@@ -218,10 +218,11 @@ func gameLoop(net *Network) {
                 binary.LittleEndian.PutUint32(message[0:], clientId);
                 binary.LittleEndian.PutUint32(message[4:], uint32(tanks[clientId].x))
                 binary.LittleEndian.PutUint32(message[8:], uint32(tanks[clientId].y))
-                message = message[12:]
+                binary.LittleEndian.PutUint32(message[12:], uint32(tanks[clientId].hp))
+                message = message[16:]
             }
             for clientId, _ := range clients {
-                clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 12 + 2]
+                clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 16 + 2]
             }
         }
 

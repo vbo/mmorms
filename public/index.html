@@ -24,10 +24,21 @@
                     return tanks[myClientId];
                 }
 
-                function Tank (x, y, clientId) {
+                function Tank (x, y, hp, clientId) {
                     this.x = x;
                     this.y = y;
                     this.clientId = clientId;
+
+                    this.maxHp = hp;
+                    this.hp = this.maxHp;
+                    this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
+                        "11px Roboto",
+                        "Red");
+                    this.hpLabelYOffset = 10;
+                    this.hpLabelXOffset = -20;
+                    this.hpLabel.x = this.x + this.hpLabelXOffset;
+                    this.hpLabel.y = this.y + this.hpLabelYOffset;
+
                     this.shape = new createjs.Container();
                     this.shape.regX = 0;
                     this.shape.regY = 25;
@@ -42,15 +53,27 @@
                     this.gun.regY = 25;
                     this.body.regX = 47;
                     this.body.regY = 25;
+
                     stage.addChild(this.shape);
+                    stage.addChild(this.hpLabel);
                 }
 
-                Tank.prototype.updateState = function(x, y) {
+                Tank.prototype.updateState = function(x, y, hp) {
                     this.x = x;
                     this.y = y;
+                    this.hp = hp;
                     this.shape.x = this.x;
+                    this.hpLabel.x = this.x + this.hpLabelXOffset;
                     this.shape.y = this.y;
+                    this.hpLabel.y = this.y + this.hpLabelYOffset;
+                    this.hpLabel.text = this.hp + "/" + this.maxHp;
                 }
+
+                Tank.prototype.destroy = function() {
+                    stage.removeChild(this.shape);
+                    stage.removeChild(this.hpLabel);
+                }
+
 
                 function Bullet (x, y, id) {
                     this.x = x;
@@ -87,14 +110,20 @@
                             var clientsNum = messageByteView[1];
                             var messageView = new Uint32Array(evt.data.slice(2));
                             for (i = 0; i < clientsNum; i++) {
-                                var clientId = messageView[i*3];
-                                var tankClientX = messageView[i*3 + 1];
-                                var tankClientY = messageView[i*3 + 2];
+                                var clientId = messageView[i*4];
+                                var tankClientX = messageView[i*4 + 1];
+                                var tankClientY = messageView[i*4 + 2];
+                                var tankClientHp = messageView[i*4 + 3];
                                 if (!tanks[clientId]) {
                                     tanks[clientId] =
-                                        new Tank(tankClientX, tankClientY, clientId);
+                                        new Tank(tankClientX,
+                                            tankClientY,
+                                            tankClientHp,
+                                            clientId);
                                 } else {
-                                    tanks[clientId].updateState(tankClientX, tankClientY);
+                                    tanks[clientId].updateState(tankClientX,
+                                        tankClientY,
+                                        tankClientHp);
                                 }
                             }
                             break;
@@ -128,7 +157,7 @@
                                 explodeAt(x, y, radius);
                             }
                             if (tanks.hasOwnProperty(deadId)) {
-                                stage.removeChild(tanks[deadId].shape);
+                                tanks[deadId].destroy();
                                 delete tanks[deadId];
                             }
                             if (bullets.hasOwnProperty(deadId)) {
