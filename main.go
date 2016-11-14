@@ -34,6 +34,8 @@ const TANK_SPEED = 10
 const WIDTH = 1260
 const HEIGHT = 620
 
+const NUM_BOTS = 5
+
 const TARGET_TICK_TIME = 20 * time.Millisecond
 
 func NewTank() *Tank {
@@ -68,6 +70,7 @@ func gameLoop(net *Network) {
     lastDtTotal := time.Duration(0)
     maxDtTotal := time.Duration(0)
     var memStats, prevMemStats runtime.MemStats
+
     for {
         if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
@@ -85,6 +88,7 @@ func gameLoop(net *Network) {
             maxDtTotal = 0.0
             prevMemStats = memStats
         }
+
         select {
         case client := <-net.connect:
             clients[client.id] = client
@@ -92,9 +96,10 @@ func gameLoop(net *Network) {
             var greetingMsg [5]byte
             greetingMsg[0] = 2
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
+            //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
             client.outgoing <- mapBitmapBuffer[0:]
-            log.Printf("Client %d connected.", client.id)
+            //log.Println("Map & greetings sent")
         case client := <-net.disconnect:
             tank := tanks[client.id]
             broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
@@ -105,11 +110,21 @@ func gameLoop(net *Network) {
             log.Printf("Client %d disconnected.", client.id)
         case message := <-net.incoming:
             msgNum := len(net.incoming)
-            // log.Printf("Number of messages: %d", msgNum)
+            /*
+            if msgNum > 1 {
+              log.Printf("Number of messages: %d", msgNum)
+            } */
             for {
                 client, ok := clients[message.from]
                 if !ok {
-                    continue // already disconnected, ignore
+                    /** 
+                      Client is either disconnected or is a bot
+                      whose connection was not established yet.
+                      We should break and wait for connection to be
+                      established first. If there are more messages
+                      waiting - they will be processed next time.
+                    */
+                    break
                 }
                 switch message.data[0] {
                     case 0: // moving
@@ -138,6 +153,7 @@ func gameLoop(net *Network) {
                 }
                 message = <-net.incoming
                 msgNum--
+                //log.Printf ("%d messages left", msgNum)
             }
         default:
         }
@@ -315,11 +331,15 @@ func isGroundUi(x uint32, y uint32, mapBitmap []byte) bool {
 func main() {
     flag.Parse()
     var addr = flag.String("addr", ":8080", "http service address")
+    rand.Seed(time.Now().UTC().UnixNano())
 
     var net Network
     net.Init()
 
     go gameLoop(&net)
+    for i := 0; i < NUM_BOTS; i++ {
+        go createBot(&net)
+    }
 
     err := runServer(&net, *addr)
     if err != nil {
