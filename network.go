@@ -1,7 +1,9 @@
 package main
 
 import (
+    "io"
     "log"
+    "encoding/binary"
     "net/http"
     "time"
     "sync"
@@ -15,6 +17,12 @@ const INCOMING_QUEUE_SIZE = 1024
 const MAX_MESSAGE_SIZE = 1024
 const PONG_TIMEOUT = 2 * time.Second
 const PING_PERIOD = 1 * time.Second
+const PINGS_RING = 8
+
+type StatsRequest struct {
+    w io.Writer
+    done chan bool
+}
 
 // Represents a capability to connect and talk to clients.
 // We need just one instance of this for the game.
@@ -24,12 +32,14 @@ type Network struct {
     connect chan *Client
     disconnect chan *Client
     incoming chan Message
+    statsRequests chan StatsRequest
 }
 
 func (net *Network) Init() {
     net.connect = make(chan *Client, CONNECTION_QUEUE_SIZE)
     net.disconnect = make(chan *Client, CONNECTION_QUEUE_SIZE)
     net.incoming = make(chan Message, INCOMING_QUEUE_SIZE)
+    net.statsRequests = make(chan StatsRequest, 8)
 }
 
 func (net *Network) GetNewObjectId() uint32 {
@@ -44,12 +54,14 @@ func (net *Network) GetNewObjectId() uint32 {
 // for each new connection and hold alive by pointer from Network.
 type Client struct {
     id uint32
+    ping float64
     outgoing chan []byte
 }
 
 type Message struct {
     from uint32
     data []byte
+    ping float64
 }
 
 func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
@@ -103,6 +115,11 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Pings ring buffer
+    var pings = make([]float64, PINGS_RING)
+    var pingsi = 0
+    var avgping float64
+
     conn.SetReadLimit(MESSAGE_QUEUE_SIZE)
     conn.SetWriteDeadline(time.Time{}) // writes won't timeout
 
@@ -115,7 +132,16 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         // the websocket connection state is corrupt and all future reads will return an error.
         // Deadline will be delayed each time we receive a websocket PONG message.
         delayReadDeadline := func () { conn.SetReadDeadline(time.Now().Add(PONG_TIMEOUT)) }
-        conn.SetPongHandler(func(string) error { delayReadDeadline(); return nil })
+        conn.SetPongHandler(func(payload string) error {
+            delayReadDeadline();
+            if len(payload) == 16 && payload[0] == 80 {
+                v := int64(binary.LittleEndian.Uint64(([]byte)(payload)[1:]))
+                pings[pingsi%PINGS_RING] = float64(time.Now().UnixNano() - v)/1000000
+                pingsi++
+                avgping = average(pings)
+            }
+            return nil;
+        })
         delayReadDeadline()
 
         for {
@@ -127,7 +153,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
                 break
             }
             //log.Printf("Message received: %d %v", client.id, message)
-            msg := Message{ from: client.id, data: message }
+            msg := Message{ from: client.id, data: message, ping: avgping }
             net.incoming <-msg
         }
     }()
@@ -140,7 +166,10 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     for {
         select {
         case <-pingTicker.C:
-            err := conn.WriteMessage(websocket.PingMessage, []byte{})
+            // Send PING message, curtime payload
+            var pingPayload = [16]byte{ 80 }
+            binary.LittleEndian.PutUint64(pingPayload[1:], uint64(time.Now().UnixNano()))
+            err := conn.WriteMessage(websocket.PingMessage, pingPayload[:])
             if err != nil {
                 return
             }
@@ -159,10 +188,24 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func serveStats(net *Network, w http.ResponseWriter, r *http.Request) {
+    done := make(chan bool)
+    net.statsRequests <- StatsRequest{ w, done }
+    <-done
+}
+
+
 func runServer(net *Network, addr string) error {
     http.Handle("/", http.FileServer(http.Dir("./public")))
     http.HandleFunc("/ws", func (w http.ResponseWriter, r *http.Request) { serveWebsocket(net, w, r) })
+    http.HandleFunc("/stats", func (w http.ResponseWriter, r *http.Request) { serveStats(net, w, r) })
 
     log.Printf("Starting web server on %s...", addr)
     return http.ListenAndServe(addr, nil)
+}
+
+func average(vs []float64) float64 {
+    var s float64
+    for _, v := range vs { s += v }
+    return s/float64(len(vs))
 }

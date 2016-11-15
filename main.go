@@ -8,6 +8,7 @@ import (
   "math"
   "time"
   "runtime"
+  "fmt"
 )
 
 type Tank struct {
@@ -108,6 +109,11 @@ func gameLoop(net *Network) {
             delete(tanks, client.id)
             close(client.outgoing)
             log.Printf("Client %d disconnected.", client.id)
+        case statsRequest := <- net.statsRequests:
+            for _, client := range clients {
+                fmt.Fprintf(statsRequest.w, "%d\t%f\n", client.id, client.ping)
+            }
+            statsRequest.done <- true
         case message := <-net.incoming:
             msgNum := len(net.incoming)
             /*
@@ -126,6 +132,7 @@ func gameLoop(net *Network) {
                     */
                     break
                 }
+                client.ping = message.ping
                 switch message.data[0] {
                     case 0: // moving
                         tanks[client.id].moving = int8(message.data[1])
