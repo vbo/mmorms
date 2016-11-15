@@ -25,16 +25,16 @@ type Bullet struct {
 const EXPLOSION_DMG = 100
 const EXPLOSION_DMG_FALLOFF = 2
 const BULLET_RAD = 30
-const BULLET_SPEED = 80
-const GRAV_ACC = 5
-const GRAV_SPEED = 20
+const BULLET_SPEED = 200
+const GRAV_ACC = 10
+const GRAV_SPEED = 80
 const TANK_RAD = 15
 const TANK_SPEED = 10
 
 const WIDTH = 1260
 const HEIGHT = 620
 
-const NUM_BOTS = 5
+const NUM_BOTS = 1
 
 const TARGET_TICK_TIME = 20 * time.Millisecond
 

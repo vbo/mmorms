@@ -97,9 +97,16 @@
                     conn = new WebSocket("ws://" + window.location.host + "/ws");
                     conn.binaryType = "arraybuffer";
                     conn.onclose = function (evt) {
-                        console.log("close")
+                        console.log("Connection closed")
+                    };
+                    conn.onerror = function (evt) {
+                        console.log("Connection failed, trying again");
+                        console.log(evt);
+                        conn = new WebSocket("ws://" + window.location.host + "/ws");
+                        conn.binaryType = "arraybuffer";
                     };
                     conn.onmessage = function (evt) {
+                        console.log("Message recieved");
                         var messageByteView = new Int8Array(evt.data);
                         switch (messageByteView[0]) {
                         case 0: // map update
@@ -208,6 +215,9 @@
                   messageView[1] = inputState.moving;
                   if (conn.readyState === conn.OPEN) {
                       conn.send(messageBuffer);
+                  } else {
+                    console.log("Still waiting for the conn to be established");
+                    console.log(conn.readyState);
                   }
                 }, 200);
 
