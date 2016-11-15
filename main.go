@@ -47,14 +47,7 @@ func NewTank() *Tank {
     }
 }
 
-func gameLoop(net *Network) {
-    clients := make(map[uint32]*Client)
-    tanks := make(map[uint32]*Tank)
-    bullets := make([]Bullet, 0, 320)
-    var mapBitmapBuffer [WIDTH * HEIGHT + 1]byte
-    mapBitmapBuffer[0] = 0 // type of message mapBitmap init
-    mapBitmap := mapBitmapBuffer[1:]
-
+func generateMapBitmap(mapBitmap []byte) {
     for x := 0; x < WIDTH; x++ {
         groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 100.0) + 1.2) * 100;
         for y := 0; y < HEIGHT; y++ {
@@ -65,6 +58,83 @@ func gameLoop(net *Network) {
             }
         }
     }
+}
+
+func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte, dtTotalSeconds float64, clients map[uint32]*Client) {
+    bullets := *bulletsIn
+    for dtTotalSeconds > 0.0 {
+        dt := math.Min(0.005, dtTotalSeconds)
+        dtTotalSeconds = dtTotalSeconds - dt
+        for _, tank := range tanks {
+            oldX := tank.x
+            oldY := tank.y
+            wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
+            if !wasOnGround {
+                // TODO(vbo): fix slow hill descent by falling
+                // instantly for no more than 2 pixels
+                tank.y += GRAV_SPEED * dt
+                if (isGroundF(oldX, tank.y, mapBitmap)) {
+                    tank.y = oldY
+                }
+            } else {
+                tank.x += float64(tank.moving) * dt * TANK_SPEED
+                if isGroundF(tank.x, oldY, mapBitmap) {
+                    for i := uint32(1); i <= 2; i++ {
+                        if !isGroundF(tank.x, oldY - float64(i), mapBitmap) {
+                            tank.y = oldY - float64(i)
+                            break
+                        }
+                    }
+                    if tank.y == oldY {
+                        tank.x = oldX
+                    }
+                }
+            }
+        }
+
+        bulletIndex := 0
+        for bulletIndex < len(bullets) {
+            bullet := &bullets[bulletIndex]
+            bullet.x += bullet.vx * dt
+            bullet.y += bullet.vy * dt
+            bullet.vy += GRAV_ACC * dt
+            if isGroundF(bullet.x, bullet.y, mapBitmap) {
+                broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
+                explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap, tanks)
+                log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
+                bullets[bulletIndex] = bullets[len(bullets) - 1]
+                bullets = bullets[:len(bullets) - 1]
+            } else {
+                bulletIndex++
+            }
+        }
+        *bulletsIn = bullets
+        // Explode and respawn dead tanks.
+        for tankID, tank := range tanks {
+            if tank.hp == 0 {
+                broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
+                explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+                tanks[tankID] = NewTank() // Respawn!
+            }
+        }
+    }
+}
+
+func gameLoop(net *Network) {
+    clients := make(map[uint32]*Client)
+    tanks := make(map[uint32]*Tank)
+    bullets := make([]Bullet, 0, 320)
+    // TODO(vbo): HUGE BUG! This map buffer is used
+    // for resonses to connect && is simultaneously 
+    // being written to by gameLoop thread!
+    // At least make a GC-ed copy.
+    mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
+    mapBitmapBuffer[0] = 0 // type of message mapBitmap init
+    mapBitmap := mapBitmapBuffer[1:]
+
+    // TODO(vbo): load from predesigned file?
+    generateMapBitmap(mapBitmap)
+
     startTime := time.Now()
     dtTotal := time.Duration(0)
     curTick := uint64(0)
@@ -90,10 +160,10 @@ func gameLoop(net *Network) {
             prevMemStats = memStats
         }
 
+        // Handle incoming messages
         select {
         case client := <-net.connect:
             clients[client.id] = client
-            tanks[client.id] = NewTank()
             var greetingMsg [5]byte
             greetingMsg[0] = 2
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
@@ -101,12 +171,17 @@ func gameLoop(net *Network) {
             client.outgoing <- greetingMsg[0:]
             client.outgoing <- mapBitmapBuffer[0:]
             //log.Println("Map & greetings sent")
+            if !client.observer {
+                tanks[client.id] = NewTank()
+            }
         case client := <-net.disconnect:
-            tank := tanks[client.id]
-            broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
-            explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+            tank, ok := tanks[client.id]
+            if ok {
+                broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
+                explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+                delete(tanks, client.id)
+            }
             delete(clients, client.id)
-            delete(tanks, client.id)
             close(client.outgoing)
             log.Printf("Client %d disconnected.", client.id)
         case statsRequest := <- net.statsRequests:
@@ -135,9 +210,12 @@ func gameLoop(net *Network) {
                 client.ping = message.ping
                 switch message.data[0] {
                     case 0: // moving
-                        tanks[client.id].moving = int8(message.data[1])
-                        if tanks[client.id].moving != 0 {
-                            log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
+                        _, ok := tanks[client.id]
+                        if ok {
+                            tanks[client.id].moving = int8(message.data[1])
+                            //if tanks[client.id].moving != 0 {
+                            //    log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
+                            //}
                         }
                     case 1: // shooting
                         aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
@@ -153,7 +231,8 @@ func gameLoop(net *Network) {
                             vx: vx,
                             vy: vy,
                         })
-                        log.Printf("New wild bullet created %d", id)
+                        //log.Printf("New wild bullet created %d", id)
+                    // TODO(vbo): what if no cases match message type?
                 }
                 if msgNum == 0 {
                     break
@@ -164,66 +243,16 @@ func gameLoop(net *Network) {
             }
         default:
         }
+
         // world simulation 
         dtTotalSeconds := dtTotal.Seconds()
-        for dtTotalSeconds > 0.0 {
-            dt := math.Min(0.005, dtTotalSeconds)
-            dtTotalSeconds = dtTotalSeconds - dt
-            for _, tank := range tanks {
-                oldX := tank.x
-                oldY := tank.y
-                wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
-                if !wasOnGround {
-                    // TODO(vbo): fix slow hill descent by falling
-                    // instantly for no more than 2 pixels
-                    tank.y += GRAV_SPEED * dt
-                    if (isGroundF(oldX, tank.y, mapBitmap)) {
-                        tank.y = oldY
-                    }
-                } else {
-                    tank.x += float64(tank.moving) * dt * TANK_SPEED
-                    if isGroundF(tank.x, oldY, mapBitmap) {
-                        for i := uint32(1); i <= 2; i++ {
-                            if !isGroundF(tank.x, oldY - float64(i), mapBitmap) {
-                                tank.y = oldY - float64(i)
-                                break
-                            }
-                        }
-                        if tank.y == oldY {
-                            tank.x = oldX
-                        }
-                    }
-                }
-            }
-            bulletIndex := 0
-            for bulletIndex < len(bullets) {
-                bullet := &bullets[bulletIndex]
-                bullet.x += bullet.vx * dt
-                bullet.y += bullet.vy * dt
-                bullet.vy += GRAV_ACC * dt
-                if isGroundF(bullet.x, bullet.y, mapBitmap) {
-                    broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
-                    explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap, tanks)
-                    log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
-                    bullets[bulletIndex] = bullets[len(bullets) - 1]
-                    bullets = bullets[:len(bullets) - 1]
-                } else {
-                    bulletIndex++
-                }
-            }
-            // Explode and respawn dead tanks.
-            for clientID, tank := range tanks {
-                if tank.hp == 0 {
-                    broadcastDeath(clientID, tank.x, tank.y, TANK_RAD, clients)
-                    explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
-                    tanks[clientID] = NewTank()
-                }
-            }
-        }
-
+        simulateWorld(tanks, &bullets, mapBitmap, dtTotalSeconds, /* TODO(vbo): remove */ clients)
+    
+        // Broadcast world snapshot
         broadcastTanks(tanks, clients)
         broadcastBullets(bullets, clients)
 
+        // Bookkeeping
         newTime := time.Now()
         dtTotal = newTime.Sub(startTime)
         lastDtTotal = dtTotal
@@ -250,17 +279,18 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
     //    of reference counted arenas.
     var stateMessageBuffer [2042]byte
     stateMessageBuffer[0] = 1 // message type state update
-    stateMessageBuffer[1] = byte(len(clients))
+    stateMessageBuffer[1] = byte(len(tanks))
     message := stateMessageBuffer[2:]
-    for clientId, _ := range clients {
-        binary.LittleEndian.PutUint32(message[0:], clientId);
-        binary.LittleEndian.PutUint32(message[4:], uint32(tanks[clientId].x))
-        binary.LittleEndian.PutUint32(message[8:], uint32(tanks[clientId].y))
-        binary.LittleEndian.PutUint32(message[12:], uint32(tanks[clientId].hp))
+    for tankId, tank := range tanks {
+        binary.LittleEndian.PutUint32(message[0:], tankId);
+        binary.LittleEndian.PutUint32(message[4:], uint32(tank.x))
+        binary.LittleEndian.PutUint32(message[8:], uint32(tank.y))
+        binary.LittleEndian.PutUint32(message[12:], uint32(tank.hp))
         message = message[16:]
     }
+
     for clientId, _ := range clients {
-        clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 16 + 2]
+        clients[clientId].outgoing <- stateMessageBuffer[0 : len(tanks) * 16 + 2]
     }
 }
 
@@ -275,6 +305,7 @@ func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
         binary.LittleEndian.PutUint32(message[8:], uint32(bullet.y))
         message = message[12:]
     }
+
     for clientId, _ := range clients {
         clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bullets) * 12 + 2]
     }
@@ -334,7 +365,7 @@ func isGroundF(x float64, y float64, mapBitmap []byte) bool {
 
 func isGroundUi(x uint32, y uint32, mapBitmap []byte) bool {
     index := x + y * WIDTH
-    return index < 0 || int(index) > len(mapBitmap) || mapBitmap[index] == 1
+    return index < 0 || int(index) >= len(mapBitmap) || mapBitmap[index] == 1
 }
 
 func main() {

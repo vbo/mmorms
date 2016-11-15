@@ -58,6 +58,7 @@ type Client struct {
     id uint32
     ping float64
     outgoing chan []byte
+    observer bool
 }
 
 type Message struct {
@@ -97,6 +98,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
+        observer: false,
     }
 
     defer func () {

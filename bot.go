@@ -20,6 +20,7 @@ func createBot(net *Network) {
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
+        observer: false,
     }
     bot := &Bot {
         input: client.outgoing,
