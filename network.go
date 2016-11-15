@@ -7,15 +7,17 @@ import (
     "net/http"
     "time"
     "sync"
-
     "github.com/gorilla/websocket"
 )
+
+import _ "net/http/pprof"
 
 const CONNECTION_QUEUE_SIZE = 256
 const MESSAGE_QUEUE_SIZE = 256
 const INCOMING_QUEUE_SIZE = 1024
 const MAX_MESSAGE_SIZE = 1024
-const PONG_TIMEOUT = 2 * time.Second
+const PONG_TIMEOUT = 10 * time.Second
+const WRITE_TIMEOUT = 5 * time.Second
 const PING_PERIOD = 1 * time.Second
 const PINGS_RING = 8
 
@@ -121,12 +123,13 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     var avgping float64
 
     conn.SetReadLimit(MESSAGE_QUEUE_SIZE)
-    conn.SetWriteDeadline(time.Time{}) // writes won't timeout
 
     // Accept new messages in a separate goroutine:
     // 1. The ReadMessage call blocks, so I don't see other choice.
     // 2. It is allowed to call Read and Write concurrently so why not?
     go func () {
+        defer conn.Close()
+        log.Printf("Starting R(%d)", client.id)
         // TODO(vbo): make sure this goroutine exits correctly on disconnect.
         // Set the read deadline after which a read becomes timed out,
         // the websocket connection state is corrupt and all future reads will return an error.
@@ -147,9 +150,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         for {
             _, message, err := conn.ReadMessage()
             if err != nil {
-                if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
-                    log.Printf("error: %v", err)
-                }
+                log.Printf("Stopping R(%d): %s", client.id, err)
                 break
             }
             //log.Printf("Message received: %d %v", client.id, message)
@@ -158,6 +159,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         }
     }()
 
+    log.Printf("Starting W(%d)", client.id)
     // Send pings and outgoing messages right in this goroutine:
     //  - We could spin a separate one but we still need to block
     // in this function to keep underlying TCP connection alive.
@@ -169,6 +171,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
             // Send PING message, curtime payload
             var pingPayload = [16]byte{ 80 }
             binary.LittleEndian.PutUint64(pingPayload[1:], uint64(time.Now().UnixNano()))
+            conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
             err := conn.WriteMessage(websocket.PingMessage, pingPayload[:])
             if err != nil {
                 return
@@ -179,11 +182,12 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
                 conn.WriteMessage(websocket.CloseMessage, []byte{})
                 return
             }
+            conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
             err := conn.WriteMessage(websocket.BinaryMessage, message)
             if err != nil {
+                log.Printf("Stopping W(%d): %s", client.id, err)
                 return
             }
-            // log.Printf("Message sent to %d", client.id)
         }
     }
 }

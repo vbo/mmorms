@@ -220,51 +220,9 @@ func gameLoop(net *Network) {
                 }
             }
         }
-        // sending updates for tanks
-        {
-            // TODO:(vbo): scratch memory arena reuse ideas:
-            //  - Under normal load we expect any send operation
-            //    to be finished after no more than N server ticks.
-            //  - Thus instead of alocating scratch memory arena for each
-            //    tick's messages we can preallocate an N-sized ring
-            //    buffer of arenas and use the next entry each tick.
-            //  - Panic situation can be discovered in R/W goroutines
-            //    by comparing deadline tick (curTick+N) passed alongside
-            //    the data pointer with the actual curTick at the send time.
-            //  - A different solution is to preallocate a pool
-            //    of reference counted arenas.
-            var stateMessageBuffer [2042]byte
-            stateMessageBuffer[0] = 1 // message type state update
-            stateMessageBuffer[1] = byte(len(clients))
-            message := stateMessageBuffer[2:]
-            for clientId, _ := range clients {
-                binary.LittleEndian.PutUint32(message[0:], clientId);
-                binary.LittleEndian.PutUint32(message[4:], uint32(tanks[clientId].x))
-                binary.LittleEndian.PutUint32(message[8:], uint32(tanks[clientId].y))
-                binary.LittleEndian.PutUint32(message[12:], uint32(tanks[clientId].hp))
-                message = message[16:]
-            }
-            for clientId, _ := range clients {
-                clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 16 + 2]
-            }
-        }
 
-        // sedning updates for bullets
-        {
-            var bulletsMessageBuffer [2560]byte
-            bulletsMessageBuffer[0] = 3 // message type bullets update
-            bulletsMessageBuffer[1] = byte(len(bullets))
-            message := bulletsMessageBuffer[2:]
-            for _, bullet := range bullets {
-                binary.LittleEndian.PutUint32(message[0:], bullet.id);
-                binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
-                binary.LittleEndian.PutUint32(message[8:], uint32(bullet.y))
-                message = message[12:]
-            }
-            for clientId, _ := range clients {
-                clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bullets) * 12 + 2]
-            }
-        }
+        broadcastTanks(tanks, clients)
+        broadcastBullets(bullets, clients)
 
         newTime := time.Now()
         dtTotal = newTime.Sub(startTime)
@@ -275,6 +233,50 @@ func gameLoop(net *Network) {
 
         // TODO: improve sleep precision
         time.Sleep(TARGET_TICK_TIME - dtTotal)
+    }
+}
+
+func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
+    // TODO:(vbo): scratch memory arena reuse ideas:
+    //  - Under normal load we expect any send operation
+    //    to be finished after no more than N server ticks.
+    //  - Thus instead of alocating scratch memory arena for each
+    //    tick's messages we can preallocate an N-sized ring
+    //    buffer of arenas and use the next entry each tick.
+    //  - Panic situation can be discovered in R/W goroutines
+    //    by comparing deadline tick (curTick+N) passed alongside
+    //    the data pointer with the actual curTick at the send time.
+    //  - A different solution is to preallocate a pool
+    //    of reference counted arenas.
+    var stateMessageBuffer [2042]byte
+    stateMessageBuffer[0] = 1 // message type state update
+    stateMessageBuffer[1] = byte(len(clients))
+    message := stateMessageBuffer[2:]
+    for clientId, _ := range clients {
+        binary.LittleEndian.PutUint32(message[0:], clientId);
+        binary.LittleEndian.PutUint32(message[4:], uint32(tanks[clientId].x))
+        binary.LittleEndian.PutUint32(message[8:], uint32(tanks[clientId].y))
+        binary.LittleEndian.PutUint32(message[12:], uint32(tanks[clientId].hp))
+        message = message[16:]
+    }
+    for clientId, _ := range clients {
+        clients[clientId].outgoing <- stateMessageBuffer[0 : len(clients) * 16 + 2]
+    }
+}
+
+func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
+    var bulletsMessageBuffer [2560]byte
+    bulletsMessageBuffer[0] = 3 // message type bullets update
+    bulletsMessageBuffer[1] = byte(len(bullets))
+    message := bulletsMessageBuffer[2:]
+    for _, bullet := range bullets {
+        binary.LittleEndian.PutUint32(message[0:], bullet.id);
+        binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
+        binary.LittleEndian.PutUint32(message[8:], uint32(bullet.y))
+        message = message[12:]
+    }
+    for clientId, _ := range clients {
+        clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bullets) * 12 + 2]
     }
 }
 
