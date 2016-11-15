@@ -34,10 +34,6 @@
                     this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
                         "11px Roboto",
                         "Red");
-                    this.hpLabelYOffset = 10;
-                    this.hpLabelXOffset = -20;
-                    this.hpLabel.x = this.x + this.hpLabelXOffset;
-                    this.hpLabel.y = this.y + this.hpLabelYOffset;
 
                     this.shape = new createjs.Container();
                     this.shape.regX = 0;
@@ -49,13 +45,14 @@
                     this.body = new createjs.Bitmap("/tank6-body.png");
                     this.shape.addChild(this.gun);
                     this.shape.addChild(this.body);
+                    this.shape.addChild(this.hpLabel);
                     this.gun.regX = 46;
                     this.gun.regY = 25;
                     this.body.regX = 47;
                     this.body.regY = 25;
-
+                    this.hpLabel.regX = 20;
+                    this.hpLabel.regY = -35;
                     stage.addChild(this.shape);
-                    stage.addChild(this.hpLabel);
                 }
 
                 Tank.prototype.updateState = function(x, y, hp) {
@@ -63,9 +60,7 @@
                     this.y = y;
                     this.hp = hp;
                     this.shape.x = this.x;
-                    this.hpLabel.x = this.x + this.hpLabelXOffset;
                     this.shape.y = this.y;
-                    this.hpLabel.y = this.y + this.hpLabelYOffset;
                     this.hpLabel.text = this.hp + "/" + this.maxHp;
                 }
 
