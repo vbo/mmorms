@@ -45,8 +45,8 @@ func updateBot(bot *Bot) {
             } else {
                 msgData = make([]byte, 9)
                 msgData[0] = 1
-                binary.LittleEndian.PutUint32(msgData[1:], uint32(rand.Intn(255) - 255))
-                binary.LittleEndian.PutUint32(msgData[5:], uint32(rand.Intn(255) - 255))
+                binary.LittleEndian.PutUint32(msgData[1:], uint32(rand.Intn(255) - 128))
+                binary.LittleEndian.PutUint32(msgData[5:], uint32(rand.Intn(255) - 128))
             }
             msg := Message {
                 from: bot.client.id,
