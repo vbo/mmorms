@@ -16,7 +16,8 @@
                 var HEIGHT = 620;
                 var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
                 var inputState = {
-                  moving: 0
+                  moving: 0,
+                  direction: 1
                 };
                 var stage = new createjs.Stage("gameCanvas");
 
@@ -101,7 +102,6 @@
                         conn.binaryType = "arraybuffer";
                     };
                     conn.onmessage = function (evt) {
-                        console.log("Message recieved");
                         var messageByteView = new Int8Array(evt.data);
                         switch (messageByteView[0]) {
                         case 0: // map update
@@ -160,6 +160,7 @@
                             }
                             if (tanks.hasOwnProperty(deadId)) {
                                 tanks[deadId].destroy();
+                                inputState.direction = 1;
                                 delete tanks[deadId];
                             }
                             if (bullets.hasOwnProperty(deadId)) {
@@ -177,30 +178,37 @@
 
                 window.addEventListener("keydown", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-                      inputState.moving = (e.code == "ArrowLeft") ? -1 : 1;
+                        // TODO: Dragons with bugs are buried here
+                        var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+                        if (inputState.direction != newDir) {
+                            me().gun.rotation = 180 - me().gun.rotation;
+                        }
+                        inputState.direction = newDir;
+                        inputState.moving = newDir;
                     }
                     if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-                        me().gun.rotation += (e.code == "ArrowUp") ? -1 : 1;
+                        // TODO: limit rotation
+                        var cosAngle = Math.cos(me().gun.rotation * Math.PI / 180);
+                        var sign = cosAngle / Math.abs(cosAngle);
+                        me().gun.rotation += (e.code == "ArrowUp") ? -1 * sign : sign;
+                    }
+                    if (e.code == "Space") {
+                        var a = me().gun.rotation * Math.PI / 180;
+                        var aimX = Math.cos(a) * 1000,
+                            aimY = Math.sin(a) * 1000;
+                        var messageBuffer = new ArrayBuffer(9);
+                        var dataView = new DataView(messageBuffer);
+                        dataView.setUint8(0, 1);
+                        dataView.setInt32(1, aimX, true /* little endian */);
+                        dataView.setInt32(5, aimY, true /* little endian */);
+                        console.log(aimX, aimY);
+                        conn.send(messageBuffer);
                     }
                 });
                 window.addEventListener("keyup", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = 0;
                     }
-                });
-                stage.on("click", function(evt) {
-                    // calculating vector with coords of byte size
-                    var targetX = evt.stageX, targetY = evt.stageY;
-                    var myX = tanks[myClientId].x, myY = tanks[myClientId].y;
-                    var aimX = targetX - myX,
-                        aimY = targetY - myY;
-                    var messageBuffer = new ArrayBuffer(9);
-                    var dataView = new DataView(messageBuffer);
-                    dataView.setUint8(0, 1);
-                    dataView.setInt32(1, aimX, true /* little endian */);
-                    dataView.setInt32(5, aimY, true /* little endian */);
-                    console.log(aimX, aimY);
-                    conn.send(messageBuffer);
                 });
 
                 setInterval(function() { // Sending packets to server
