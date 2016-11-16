@@ -17,6 +17,7 @@
                 var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
                 var inputState = {
                   moving: 0,
+                  power: 0,
                   direction: 1
                 };
                 var stage = new createjs.Stage("gameCanvas");
@@ -154,7 +155,7 @@
                                 x = messageData[1],
                                 y = messageData[2],
                                 radius = messageData[3];
-                            console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
+                            // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
                             if (radius > 0) {
                                 explodeAt(x, y, radius);
                             }
@@ -205,21 +206,37 @@
                         changeAngle(e.code == "ArrowUp");
                     }
                     if (e.code == "Space") {
-                        var a = me().gun.rotation * Math.PI / 180;
-                        var aimX = Math.cos(a) * 1000,
-                            aimY = Math.sin(a) * 1000;
-                        var messageBuffer = new ArrayBuffer(9);
-                        var dataView = new DataView(messageBuffer);
-                        dataView.setUint8(0, 1);
-                        dataView.setInt32(1, aimX, true /* little endian */);
-                        dataView.setInt32(5, aimY, true /* little endian */);
-                        console.log(aimX, aimY);
-                        conn.send(messageBuffer);
+                        if (inputState.power == 0) {
+                            inputState.power = Date.now();
+                        }
+                        // TODO: display how the power grows
                     }
                 });
                 window.addEventListener("keyup", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = 0;
+                    }
+                    if (e.code == "Space") {
+                        inputState.power = Math.floor((Date.now() - inputState.power) / 100);
+                        if (inputState.power <= 0) {
+                            inputState.power = 1;
+                        }
+                        if (inputState.power > 10) {
+                            inputState.power = 10;
+                        }
+                        console.log("Shooting with power " + inputState.power);
+                        var a = me().gun.rotation * Math.PI / 180;
+                        var aimX = Math.cos(a) * 1000,
+                            aimY = Math.sin(a) * 1000;
+                        var messageBuffer = new ArrayBuffer(10);
+                        var dataView = new DataView(messageBuffer);
+                        dataView.setUint8(0, 1);
+                        dataView.setInt32(1, aimX, true /* little endian */);
+                        dataView.setInt32(5, aimY, true /* little endian */);
+                        dataView.setUint8(9, inputState.power);
+                        console.log(aimX, aimY);
+                        conn.send(messageBuffer);
+                        inputState.power = 0;
                     }
                 });
 
@@ -289,7 +306,7 @@
                     updateMaskPixelsFromMap(mapBitmap, data);
                     ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
                     var bmpDelta2 = performance.now() - bmpStart2;
-                    console.log("Explosion update took " + bmpDelta2 + " milliseconds");
+                    // console.log("Explosion update took " + bmpDelta2 + " milliseconds");
                 }
 
                 // Render loop.
