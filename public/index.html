@@ -40,7 +40,6 @@
                     this.shape = new createjs.Container();
                     this.shape.regX = 0;
                     this.shape.regY = 25;
-                    //this.shape.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 15);
                     this.shape.x = this.x;
                     this.shape.y = this.y;
                     this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
@@ -256,22 +255,21 @@
                 });
 
                 setInterval(function() { // Sending packets to server
-                  var messageBuffer = new ArrayBuffer(2);
-                  var messageView = new Uint8Array(messageBuffer);
-                  messageView[0] = 0; // 0 - moving type of message
-                  messageView[1] = inputState.moving;
-                  if (conn.readyState === conn.OPEN) {
-                      conn.send(messageBuffer);
-                  } else {
-                    //console.log("Still waiting for the conn to be established");
-                  }
+                      var messageBuffer = new ArrayBuffer(2);
+                      var messageView = new Uint8Array(messageBuffer);
+                      messageView[0] = 0; // 0 - moving type of message
+                      messageView[1] = inputState.moving;
+                      if (conn.readyState === conn.OPEN) {
+                          conn.send(messageBuffer);
+                      } else {
+                          //console.log("Still waiting for the conn to be established");
+                      }
                 }, 200);
 
                 // Draw the map bitmap to a canvas to use
                 // it as an alpha mask for map theme image
 
                 // Update pixel data and blit back to canvas (~5ms cold)
-
                 function updateMapCanvas() {
                     var data = maskImageData.data;
                     var bmpStart2 = performance.now();
