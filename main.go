@@ -108,7 +108,6 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                 bulletIndex++
             }
         }
-        *bulletsIn = bullets
         // Explode and respawn dead tanks.
         for tankID, tank := range tanks {
             if tank.hp == 0 {
@@ -118,6 +117,8 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             }
         }
     }
+
+    *bulletsIn = bullets
 }
 
 func gameLoop(net *Network) {
@@ -160,6 +161,10 @@ func gameLoop(net *Network) {
             prevMemStats = memStats
         }
 
+        // Make a GC-ed copy of the mapBitmap to respond to connects
+        mapBitmapBufferCopy := make([]byte, len(mapBitmapBuffer))
+        copy(mapBitmapBufferCopy, mapBitmapBuffer)
+
         // Handle incoming messages
         select {
         case client := <-net.connect:
@@ -169,7 +174,7 @@ func gameLoop(net *Network) {
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
             //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
-            client.outgoing <- mapBitmapBuffer[0:]
+            client.outgoing <- mapBitmapBufferCopy[0:]
             //log.Println("Map & greetings sent")
             if !client.observer {
                 tanks[client.id] = NewTank()
@@ -326,30 +331,30 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     log.Printf("Object %d died bravely", id)
 }
 
-func explodeAt(cxf float64, cyf float64, r uint32, mapBitmap []byte, tanks map[uint32]*Tank) {
+func explodeAt(cx float64, cy float64, r float64, mapBitmap []byte, tanks map[uint32]*Tank) {
     // Destroy terrain
-    cx := uint32(cxf)
-    cy := uint32(cyf)
-    rs := r*r
-    sx := maxUint32(cx - r, 0)
-    sy := maxUint32(cy - r, 0)
-    ly := minUint32(cy + r, HEIGHT)
-    lx := minUint32(cx + r, WIDTH)
+    // Use signed float math to contain the explosion in the map bounds.
+    // Cast to pixels as the last step.
+    sx := math.Max(cx - r, 0);
+    sy := math.Max(cy - r, 0)
+    ly := math.Min(cy + r, HEIGHT)
+    lx := math.Min(cx + r, WIDTH)
+    rs := math.Pow(r, 2)
     for y := sy; y < ly; y++ {
         for x := sx; x < lx; x++ {
             ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
             if ds < rs {
-                mapBitmap[x + y * WIDTH] = 0;
+                mapBitmap[uint32(x) + uint32(y) * WIDTH] = 0;
             }
         }
     }
     // Hit tanks
     for tankID, tank := range tanks {
-        dx := uint32(tank.x) - cx
-        dy := uint32(tank.y) - cy
+        dx := tank.x - cx
+        dy := tank.y - cy
         ds := dx*dx + dy*dy
-        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
-        if dmg > 0 {
+        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(ds)
+        if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
             log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
