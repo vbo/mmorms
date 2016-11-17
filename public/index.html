@@ -17,6 +17,7 @@
                 var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
                 var inputState = {
                   moving: 0,
+                  power: 0,
                   direction: 1
                 };
                 var stage = new createjs.Stage("gameCanvas");
@@ -39,7 +40,6 @@
                     this.shape = new createjs.Container();
                     this.shape.regX = 0;
                     this.shape.regY = 25;
-                    //this.shape.graphics.beginFill("DeepSkyBlue").drawCircle(0, 0, 15);
                     this.shape.x = this.x;
                     this.shape.y = this.y;
                     this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
@@ -154,13 +154,15 @@
                                 x = messageData[1],
                                 y = messageData[2],
                                 radius = messageData[3];
-                            console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
+                            // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
                             if (radius > 0) {
                                 explodeAt(x, y, radius);
                             }
                             if (tanks.hasOwnProperty(deadId)) {
                                 tanks[deadId].destroy();
-                                inputState.direction = 1;
+                                if (deadId == myClientId) {
+                                    inputState.direction = 1;
+                                }
                                 delete tanks[deadId];
                             }
                             if (bullets.hasOwnProperty(deadId)) {
@@ -175,10 +177,33 @@
                     return;
                 }
 
+                function changeAngle(arrowUp) {
+                    var cosAngle = Math.cos(me().gun.rotation * Math.PI / 180);
+                    var sinAngle = Math.sin(me().gun.rotation * Math.PI / 180);
+                    if (!arrowUp && sinAngle > 0 && Math.abs(cosAngle) < 0.92) {
+                        return; // gun is already too low
+                    }
+                    if (arrowUp && sinAngle < 0 && Math.abs(cosAngle) < 0.09) {
+                        return; // gun is already too high
+                    }
+                    var inc = 2 * cosAngle / Math.abs(cosAngle);
+                    me().gun.rotation += arrowUp ? -1 * inc : inc;
+                }
+
+                function getShootingPower(inputState) {
+                    var power = Math.floor((Date.now() - inputState.power) / 300);
+                    if (power <= 0) {
+                        power = 1;
+                    }
+                    if (power > 10) {
+                        power = 10;
+                    }
+                    return power;
+                }
+
 
                 window.addEventListener("keydown", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-                        // TODO: Dragons with bugs are buried here
                         var newDir = (e.code == "ArrowLeft") ? -1 : 1;
                         if (inputState.direction != newDir) {
                             me().gun.rotation = 180 - me().gun.rotation;
@@ -187,48 +212,64 @@
                         inputState.moving = newDir;
                     }
                     if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-                        // TODO: limit rotation
-                        var cosAngle = Math.cos(me().gun.rotation * Math.PI / 180);
-                        var sign = cosAngle / Math.abs(cosAngle);
-                        me().gun.rotation += (e.code == "ArrowUp") ? -1 * sign : sign;
+                        changeAngle(e.code == "ArrowUp");
                     }
                     if (e.code == "Space") {
-                        var a = me().gun.rotation * Math.PI / 180;
-                        var aimX = Math.cos(a) * 1000,
-                            aimY = Math.sin(a) * 1000;
-                        var messageBuffer = new ArrayBuffer(9);
-                        var dataView = new DataView(messageBuffer);
-                        dataView.setUint8(0, 1);
-                        dataView.setInt32(1, aimX, true /* little endian */);
-                        dataView.setInt32(5, aimY, true /* little endian */);
-                        console.log(aimX, aimY);
-                        conn.send(messageBuffer);
+                        if (inputState.power == 0) {
+                            inputState.power = Date.now();
+                            function updateGun() {
+                                if (inputState.power == 0) {
+                                    return;
+                                }
+                                var power = getShootingPower(inputState);
+                                me().gun.filters = [new createjs.ColorFilter(1, 0, 0, power/10)];
+                                me().gun.cache(0, 0, 100, 100);
+                                setTimeout(updateGun, 100);
+                            }
+                            setTimeout(updateGun, 100);
+                        }
                     }
                 });
                 window.addEventListener("keyup", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = 0;
                     }
+                    if (e.code == "Space") {
+                        inputState.power = getShootingPower(inputState);
+                        console.log("Shooting with power " + inputState.power);
+                        var a = me().gun.rotation * Math.PI / 180;
+                        var aimX = Math.cos(a) * 1000,
+                            aimY = Math.sin(a) * 1000;
+                        var messageBuffer = new ArrayBuffer(10);
+                        var dataView = new DataView(messageBuffer);
+                        dataView.setUint8(0, 1);
+                        dataView.setInt32(1, aimX, true /* little endian */);
+                        dataView.setInt32(5, aimY, true /* little endian */);
+                        dataView.setUint8(9, inputState.power);
+                        console.log(aimX, aimY);
+                        conn.send(messageBuffer);
+                        inputState.power = 0;
+                        me().gun.filters = [];
+                        me().gun.cache(0, 0, 100, 100);
+                    }
                 });
 
                 setInterval(function() { // Sending packets to server
-                  var messageBuffer = new ArrayBuffer(2);
-                  var messageView = new Uint8Array(messageBuffer);
-                  messageView[0] = 0; // 0 - moving type of message
-                  messageView[1] = inputState.moving;
-                  if (conn.readyState === conn.OPEN) {
-                      conn.send(messageBuffer);
-                  } else {
-                    console.log("Still waiting for the conn to be established");
-                    console.log(conn.readyState);
-                  }
+                      var messageBuffer = new ArrayBuffer(2);
+                      var messageView = new Uint8Array(messageBuffer);
+                      messageView[0] = 0; // 0 - moving type of message
+                      messageView[1] = inputState.moving;
+                      if (conn.readyState === conn.OPEN) {
+                          conn.send(messageBuffer);
+                      } else {
+                          //console.log("Still waiting for the conn to be established");
+                      }
                 }, 200);
 
                 // Draw the map bitmap to a canvas to use
                 // it as an alpha mask for map theme image
 
                 // Update pixel data and blit back to canvas (~5ms cold)
-
                 function updateMapCanvas() {
                     var data = maskImageData.data;
                     var bmpStart2 = performance.now();
@@ -277,7 +318,7 @@
                     updateMaskPixelsFromMap(mapBitmap, data);
                     ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
                     var bmpDelta2 = performance.now() - bmpStart2;
-                    console.log("Explosion update took " + bmpDelta2 + " milliseconds");
+                    // console.log("Explosion update took " + bmpDelta2 + " milliseconds");
                 }
 
                 // Render loop.

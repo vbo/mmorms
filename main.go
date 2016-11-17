@@ -26,8 +26,8 @@ type Bullet struct {
 const EXPLOSION_DMG = 100
 const EXPLOSION_DMG_FALLOFF = 2
 const BULLET_RAD = 30
-const BULLET_SPEED = 200
-const GRAV_ACC = 10
+const BULLET_SPEED = 20
+const GRAV_ACC = 30
 const GRAV_SPEED = 80
 const TANK_RAD = 15
 const TANK_SPEED = 10
@@ -225,9 +225,15 @@ func gameLoop(net *Network) {
                     case 1: // shooting
                         aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                         aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
+                        power := float64(message.data[9])
+                        if power <= 0 {
+                            power = 1
+                        } else if power > 10 {
+                            power = 10
+                        }
                         aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
-                        vx := BULLET_SPEED * aimX / aimLen
-                        vy := BULLET_SPEED * aimY / aimLen
+                        vx := BULLET_SPEED * aimX * power / aimLen
+                        vy := BULLET_SPEED * aimY * power / aimLen
                         id := net.GetNewObjectId()
                         bullets = append(bullets, Bullet{
                             id: id,
