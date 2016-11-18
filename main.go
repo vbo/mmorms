@@ -31,6 +31,8 @@ const GRAV_ACC = 30
 const GRAV_SPEED = 80
 const TANK_RAD = 15
 const TANK_SPEED = 10
+const TANK_TOWER_HEIGHT = 25
+const TANK_GUN_LENGTH = 30
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -229,13 +231,16 @@ func gameLoop(net *Network) {
                             power = 10
                         }
                         aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
-                        vx := BULLET_SPEED * aimX * power / aimLen
-                        vy := BULLET_SPEED * aimY * power / aimLen
+                        aimX /= aimLen; aimY /= aimLen
+                        vx := BULLET_SPEED * aimX * power
+                        vy := BULLET_SPEED * aimY * power
                         id := net.GetNewObjectId()
+                        x := tanks[client.id].x + TANK_GUN_LENGTH * aimX
+                        y := tanks[client.id].y - TANK_TOWER_HEIGHT * (1 - aimY)
                         bullets = append(bullets, Bullet{
                             id: id,
-                            x: tanks[client.id].x,
-                            y: tanks[client.id].y,
+                            x: x,
+                            y: y,
                             vx: vx,
                             vy: vy,
                         })
