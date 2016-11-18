@@ -106,7 +106,7 @@
                             break;
                         case 1: // state update
                             var clientsNum = messageByteView[1];
-                            var messageView = new Uint32Array(evt.data.slice(2));
+                            var messageView = new Int32Array(evt.data.slice(2));
                             for (i = 0; i < clientsNum; i++) {
                                 var clientId = messageView[i*4];
                                 var tankClientX = messageView[i*4 + 1];
@@ -126,12 +126,12 @@
                             }
                             break;
                         case 2: // greetings message
-                            myClientId = (new Uint32Array(evt.data.slice(1)))[0];
+                            myClientId = (new Int32Array(evt.data.slice(1)))[0];
                             console.log("I am " + myClientId);
                             break;
                         case 3: // bullets update
                             var bulletsNum = messageByteView[1];
-                            var messageView = new Uint32Array(evt.data.slice(2));
+                            var messageView = new Int32Array(evt.data.slice(2));
                             for (i = 0; i < bulletsNum; i++) {
                                 var id = messageView[i*3];
                                 var bulletX = messageView[i*3 + 1];
@@ -145,7 +145,7 @@
                             }
                             break;
                         case 4: // death message
-                            var messageData = new Uint32Array(evt.data.slice(1));
+                            var messageData = new Int32Array(evt.data.slice(1));
                             var deadId = messageData[0],
                                 x = messageData[1],
                                 y = messageData[2],
@@ -265,9 +265,9 @@
 
                 function explodeAt(cx, cy, r) {
                     // Example map update comes
-                    var rs = Math.pow(r, 2);
-                    var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
-                    var ly = Math.min(cy + r, HEIGHT), lx = Math.min(cx + r, WIDTH);
+                    var rs = (r*r)|0;
+                    var sx = Math.max(cx - r, 0)|0, sy = Math.max(cy - r, 0)|0;
+                    var ly = Math.min(cy + r, HEIGHT)|0, lx = Math.min(cx + r, WIDTH)|0;
                     for (var y = sy; y < ly; y++) {
                         for (var x = sx; x < lx; x++) {
                             var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);

@@ -79,7 +79,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             } else {
                 tank.x += float64(tank.moving) * dt * TANK_SPEED
                 if isGroundF(tank.x, oldY, mapBitmap) {
-                    for i := uint32(1); i <= 2; i++ {
+                    for i := 1; i <= 2; i++ {
                         if !isGroundF(tank.x, oldY - float64(i), mapBitmap) {
                             tank.y = oldY - float64(i)
                             break
@@ -100,7 +100,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             bullet.vy += GRAV_ACC * dt
             if isGroundF(bullet.x, bullet.y, mapBitmap) {
                 broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
-                explodeAt(bullet.x, bullet.y, BULLET_RAD, mapBitmap, tanks)
+                explodeAt(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_RAD, mapBitmap, tanks)
                 log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
@@ -112,7 +112,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
         for tankID, tank := range tanks {
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+                explodeAt(coordToPixel(tank.x), coordToPixel(tank.y), TANK_RAD, mapBitmap, tanks)
                 tanks[tankID] = NewTank() // Respawn!
             }
         }
@@ -180,7 +180,7 @@ func gameLoop(net *Network) {
             tank, ok := tanks[client.id]
             if ok {
                 broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(tank.x, tank.y, TANK_RAD, mapBitmap, tanks)
+                explodeAt(coordToPixel(tank.x), coordToPixel(tank.y), TANK_RAD, mapBitmap, tanks)
                 delete(tanks, client.id)
             }
             delete(clients, client.id)
@@ -334,16 +334,14 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     log.Printf("Object %d died bravely", id)
 }
 
-func explodeAt(cx float64, cy float64, r float64, mapBitmap []byte, tanks map[uint32]*Tank) {
-    // TODO: make sure this implementation is 100% identically to js.
+func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*Tank) {
     // Destroy terrain
-    // Use signed float math to contain the explosion in the map bounds.
-    // Cast to pixels as the last step.
-    sx := math.Max(cx - r, 0);
-    sy := math.Max(cy - r, 0)
-    ly := math.Min(cy + r, HEIGHT)
-    lx := math.Min(cx + r, WIDTH)
-    rs := math.Pow(r, 2)
+    // Use signed int math to make it possible to write equivalent js.
+    sx := maxInt32(cx - r, 0)
+    sy := maxInt32(cy - r, 0)
+    ly := minInt32(cy + r, HEIGHT)
+    lx := minInt32(cx + r, WIDTH)
+    rs := r*r
     for y := sy; y < ly; y++ {
         for x := sx; x < lx; x++ {
             ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
@@ -354,10 +352,10 @@ func explodeAt(cx float64, cy float64, r float64, mapBitmap []byte, tanks map[ui
     }
     // Hit tanks
     for tankID, tank := range tanks {
-        dx := tank.x - cx
-        dy := tank.y - cy
+        dx := coordToPixel(tank.x) - cx
+        dy := coordToPixel(tank.y) - cy
         ds := dx*dx + dy*dy
-        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(ds)
+        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
         if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
@@ -367,12 +365,12 @@ func explodeAt(cx float64, cy float64, r float64, mapBitmap []byte, tanks map[ui
 }
 
 func isGroundF(x float64, y float64, mapBitmap []byte) bool {
-    mapX := uint32(x)
-    mapY := uint32(y)
-    return isGroundUi(mapX, mapY, mapBitmap)
+    mapX := coordToPixel(x)
+    mapY := coordToPixel(y)
+    return isGroundI(mapX, mapY, mapBitmap)
 }
 
-func isGroundUi(x uint32, y uint32, mapBitmap []byte) bool {
+func isGroundI(x int32, y int32, mapBitmap []byte) bool {
     index := x + y * WIDTH
     return index < 0 || int(index) >= len(mapBitmap) || mapBitmap[index] == 1
 }
@@ -396,16 +394,20 @@ func main() {
     }
 }
 
-func maxUint32(a uint32, b uint32) uint32 {
+func maxInt32(a int32, b int32) int32 {
     if a > b {
         return a
     }
     return b
 }
 
-func minUint32(a uint32, b uint32) uint32 {
+func minInt32(a int32, b int32) int32 {
     if a < b {
         return a
     }
     return b
+}
+
+func coordToPixel(x float64) int32 {
+    return int32(x)
 }
