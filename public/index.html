@@ -133,7 +133,6 @@
                             break;
                         case 3: // bullets update
                             var bulletsNum = dataView.getUint32(1, true);
-                            console.log("Num of bullets" + bulletsNum)
                             var headerOffset = 5;
                             for (i = 0; i < bulletsNum; i++) {
                                 var id = dataView.getUint32(headerOffset + i*12, true);
@@ -165,7 +164,29 @@
                                 delete tanks[deadId];
                             }
                             if (bullets.hasOwnProperty(deadId)) {
-                                render.stage.removeChild(bullets[deadId].shape);
+                                var bullet = bullets[deadId];
+                                var explosion = new createjs.Bitmap("/explosion2.png");
+                                explosion.scaleX = 0.25;
+                                explosion.scaleY = 0.25;
+                                explosion.x = x;
+                                explosion.y = y;
+                                render.stage.addChild(explosion);
+                                explosion.regX = 32;
+                                explosion.regY = 32;
+                                var times = 3;
+                                function animateExplosion() {
+                                    explosion.cache(0, 0, 64, 64);
+                                    if (times > 0) {
+                                        explosion.scaleX += 0.5;
+                                        explosion.scaleY += 0.5;
+                                        setTimeout(animateExplosion, 100);
+                                        times--;
+                                    } else {
+                                        render.stage.removeChild(explosion);
+                                    }
+                                }
+                                animateExplosion();
+                                render.stage.removeChild(bullet.shape);
                                 delete bullets[deadId];
                             }
                         }
