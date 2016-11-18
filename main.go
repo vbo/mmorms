@@ -101,7 +101,16 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             bullet.x += bullet.vx * dt
             bullet.y += bullet.vy * dt
             bullet.vy += GRAV_ACC * dt
-            if isGroundInCircle(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_RAD, mapBitmap) {
+            if (isGroundInCircle(
+                    coordToPixel(bullet.x),
+                    coordToPixel(bullet.y),
+                    BULLET_RAD,
+                    mapBitmap) ||
+                isTankInCircle(
+                    coordToPixel(bullet.x),
+                    coordToPixel(bullet.y),
+                    BULLET_RAD,
+                    tanks))  {
                 broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
                 explodeAt(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_EXPLOSION_RAD, mapBitmap, tanks)
                 log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
@@ -369,6 +378,18 @@ func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*
             log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }
     }
+}
+
+func isTankInCircle(cx int32, cy int32, r int32, tanks map[uint32]*Tank) bool {
+    for _, tank := range tanks {
+        x := int32(tank.x)
+        y := int32(tank.y)
+        ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
+        if ds < r*r {
+            return true
+        }
+    }
+    return false
 }
 
 func isGroundInCircle(cx int32, cy int32, r int32, mapBitmap []byte) bool {
