@@ -38,7 +38,7 @@ const TANK_GUN_LENGTH = 30
 const WIDTH = 1260
 const HEIGHT = 620
 
-const NUM_BOTS = 1
+const NUM_BOTS = 20
 
 const TARGET_TICK_TIME = 20 * time.Millisecond
 
@@ -309,7 +309,7 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
 }
 
 func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
-    var bulletsMessageBuffer [2560]byte
+    var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 2)
     bulletsMessageBuffer[0] = 3 // message type bullets update
     bulletsMessageBuffer[1] = byte(len(bullets))
     message := bulletsMessageBuffer[2:]
@@ -321,7 +321,7 @@ func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
     }
 
     for clientId, _ := range clients {
-        clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bullets) * 12 + 2]
+        clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bulletsMessageBuffer)]
     }
 }
 
