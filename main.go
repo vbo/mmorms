@@ -25,7 +25,8 @@ type Bullet struct {
 
 const EXPLOSION_DMG = 100
 const EXPLOSION_DMG_FALLOFF = 2
-const BULLET_RAD = 30
+const BULLET_EXPLOSION_RAD = 30
+const BULLET_RAD = 5
 const BULLET_SPEED = 20
 const GRAV_ACC = 30
 const GRAV_SPEED = 80
@@ -100,9 +101,9 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             bullet.x += bullet.vx * dt
             bullet.y += bullet.vy * dt
             bullet.vy += GRAV_ACC * dt
-            if isGroundF(bullet.x, bullet.y, mapBitmap) {
-                broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_RAD, clients)
-                explodeAt(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_RAD, mapBitmap, tanks)
+            if isGroundInCircle(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_RAD, mapBitmap) {
+                broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
+                explodeAt(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_EXPLOSION_RAD, mapBitmap, tanks)
                 log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
@@ -367,6 +368,25 @@ func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*
             log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }
     }
+}
+
+func isGroundInCircle(cx int32, cy int32, r int32, mapBitmap []byte) bool {
+    sx := maxInt32(cx - r, 0)
+    sy := maxInt32(cy - r, 0)
+    ly := minInt32(cy + r, HEIGHT)
+    lx := minInt32(cx + r, WIDTH)
+    rs := r*r
+    for y := sy; y < ly; y++ {
+        for x := sx; x < lx; x++ {
+            if isGroundI(x, y, mapBitmap) {
+                ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
+                if (ds < rs) {
+                    return true
+                }
+            }
+        }
+    }
+    return false
 }
 
 func isGroundF(x float64, y float64, mapBitmap []byte) bool {
