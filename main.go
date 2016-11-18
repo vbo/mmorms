@@ -125,10 +125,6 @@ func gameLoop(net *Network) {
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
-    // TODO(vbo): HUGE BUG! This map buffer is used
-    // for resonses to connect && is simultaneously 
-    // being written to by gameLoop thread!
-    // At least make a GC-ed copy.
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = 0 // type of message mapBitmap init
     mapBitmap := mapBitmapBuffer[1:]
@@ -162,6 +158,7 @@ func gameLoop(net *Network) {
         }
 
         // Make a GC-ed copy of the mapBitmap to respond to connects
+        // TODO: can we allocate the space just once and reuse it?
         mapBitmapBufferCopy := make([]byte, len(mapBitmapBuffer))
         copy(mapBitmapBufferCopy, mapBitmapBuffer)
 
@@ -338,6 +335,7 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
 }
 
 func explodeAt(cx float64, cy float64, r float64, mapBitmap []byte, tanks map[uint32]*Tank) {
+    // TODO: make sure this implementation is 100% identically to js.
     // Destroy terrain
     // Use signed float math to contain the explosion in the map bounds.
     // Cast to pixels as the last step.

@@ -3,6 +3,7 @@
     <head>
         <title>MMOrms</title>
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
+        <script src="/render.js"></script>
         <script type="text/javascript">
             window.onload = function () {
                 var conn;
@@ -10,17 +11,15 @@
                 var tanks = {};
                 var bullets = {};
                 var mapBitmap;
-                var canvas = document.getElementById('maskCanvas');
-                var ctx = canvas.getContext('2d');
                 var WIDTH = 1260;
                 var HEIGHT = 620;
-                var maskImageData = ctx.createImageData(WIDTH, HEIGHT);
                 var inputState = {
                   moving: 0,
                   power: 0,
                   direction: 1
                 };
-                var stage = new createjs.Stage("gameCanvas");
+
+                render.init(WIDTH, HEIGHT);
 
                 window.me = function() {
                     return tanks[myClientId];
@@ -30,13 +29,11 @@
                     this.x = x;
                     this.y = y;
                     this.clientId = clientId;
-
                     this.maxHp = hp;
                     this.hp = this.maxHp;
                     this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
                         "11px Roboto",
                         "Red");
-
                     this.shape = new createjs.Container();
                     this.shape.regX = 0;
                     this.shape.regY = 25;
@@ -53,7 +50,7 @@
                     this.body.regY = 25;
                     this.hpLabel.regX = 20;
                     this.hpLabel.regY = -35;
-                    stage.addChild(this.shape);
+                    render.stage.addChild(this.shape);
                 }
 
                 Tank.prototype.updateState = function(x, y, hp) {
@@ -66,10 +63,9 @@
                 }
 
                 Tank.prototype.destroy = function() {
-                    stage.removeChild(this.shape);
-                    stage.removeChild(this.hpLabel);
+                    render.stage.removeChild(this.shape);
+                    render.stage.removeChild(this.hpLabel);
                 }
-
 
                 function Bullet (x, y, id) {
                     this.x = x;
@@ -79,7 +75,7 @@
                     this.shape.graphics.beginFill("Red").drawCircle(0, 0, 5);
                     this.shape.x = this.x;
                     this.shape.y = this.y;
-                    stage.addChild(this.shape);
+                    render.stage.addChild(this.shape);
                 }
 
                 Bullet.prototype.updateState = function(x, y) {
@@ -106,7 +102,7 @@
                         switch (messageByteView[0]) {
                         case 0: // map update
                             mapBitmap = new Int8Array(evt.data, 1); 
-                            updateMapCanvas();
+                            render.updateMapCanvas(mapBitmap);
                             break;
                         case 1: // state update
                             var clientsNum = messageByteView[1];
@@ -166,7 +162,7 @@
                                 delete tanks[deadId];
                             }
                             if (bullets.hasOwnProperty(deadId)) {
-                                stage.removeChild(bullets[deadId].shape);
+                                render.stage.removeChild(bullets[deadId].shape);
                                 delete bullets[deadId];
                             }
                         }
@@ -230,6 +226,7 @@
                         }
                     }
                 });
+
                 window.addEventListener("keyup", function(e) {
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = 0;
@@ -266,43 +263,7 @@
                       }
                 }, 200);
 
-                // Draw the map bitmap to a canvas to use
-                // it as an alpha mask for map theme image
-
-                // Update pixel data and blit back to canvas (~5ms cold)
-                function updateMapCanvas() {
-                    var data = maskImageData.data;
-                    var bmpStart2 = performance.now();
-                    updateMaskPixelsFromMap(mapBitmap, data);
-                    ctx.putImageData(maskImageData, 0, 0);
-                    var bmpDelta2 = performance.now() - bmpStart2;
-                    console.log("BMP batch drawing took " + bmpDelta2 + " milliseconds");
-                }
-                
-                function updateMaskPixelsFromMap(map, pixels) {
-                    for (var p = 0, l = map.length; p < l; p += 4) {
-                        var q = p*4;
-                        pixels[q+3] = map[p] * 255;
-                        pixels[q+7] = map[p+1] * 255;
-                        pixels[q+11] = map[p+2] * 255;
-                        pixels[q+15] = map[p+3] * 255;
-                    }
-                }
-                
-                var bgSky = new createjs.Shape();
-                bgSky.graphics.beginFill("white").drawRect(0, 0, WIDTH, HEIGHT);
-                stage.addChild(bgSky);
-
-                // Background "theme" image.
-                var bgImage = new createjs.Bitmap("/theme.jpg");
-                bgImage.filters = [
-                    new createjs.AlphaMaskFilter(canvas)
-                ];
-                stage.addChild(bgImage);
-
                 function explodeAt(cx, cy, r) {
-                    var data = maskImageData.data;
-                    var bmpStart2 = performance.now();
                     // Example map update comes
                     var rs = Math.pow(r, 2);
                     var sx = Math.max(cx - r, 0), sy = Math.max(cy - r, 0);
@@ -311,22 +272,18 @@
                         for (var x = sx; x < lx; x++) {
                             var ds = Math.pow(y-cy, 2) + Math.pow(x-cx, 2);
                             if (ds < rs) {
-                                mapBitmap[x + y*WIDTH] = 0;
+                                mapBitmap[(x|0) + (y|0)*WIDTH] = 0;
                             }
                         }
                     }
-                    updateMaskPixelsFromMap(mapBitmap, data);
-                    ctx.putImageData(maskImageData, 0, 0, sx, sy, 2*r, 2*r);
-                    var bmpDelta2 = performance.now() - bmpStart2;
-                    // console.log("Explosion update took " + bmpDelta2 + " milliseconds");
+                    render.updateMapCanvasPartial(mapBitmap, sx, sy, 2*r, 2*r);
                 }
 
                 // Render loop.
                 createjs.Ticker.on("tick", tick);
                 createjs.Ticker.setFPS(60);
                 function tick(evt) {
-                    bgImage.cache(0, 0, WIDTH, HEIGHT); // every frame?
-                    stage.update();
+                    render.redraw();
                 }
             };
         </script>
