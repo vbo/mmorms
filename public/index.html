@@ -98,8 +98,10 @@
                         conn.binaryType = "arraybuffer";
                     };
                     conn.onmessage = function (evt) {
-                        var messageByteView = new Int8Array(evt.data);
-                        switch (messageByteView[0]) {
+                        var dataView = new DataView(evt.data);
+                        // TODO: Replace with DataView
+                        var messageByteView = new Uint8Array(evt.data);
+                        switch (dataView.getUint8(0)) {
                         case 0: // map update
                             mapBitmap = new Int8Array(evt.data, 1); 
                             render.updateMapCanvas(mapBitmap);
@@ -130,12 +132,13 @@
                             console.log("I am " + myClientId);
                             break;
                         case 3: // bullets update
-                            var bulletsNum = messageByteView[1];
-                            var messageView = new Int32Array(evt.data.slice(2));
+                            var bulletsNum = dataView.getUint32(1, true);
+                            console.log("Num of bullets" + bulletsNum)
+                            var headerOffset = 5;
                             for (i = 0; i < bulletsNum; i++) {
-                                var id = messageView[i*3];
-                                var bulletX = messageView[i*3 + 1];
-                                var bulletY = messageView[i*3 + 2];
+                                var id = dataView.getUint32(headerOffset + i*12, true);
+                                var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
+                                var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
                                 if (!bullets[id]) {
                                     bullets[id] =
                                         new Bullet(bulletX, bulletY, id);

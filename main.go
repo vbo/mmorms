@@ -309,10 +309,10 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
 }
 
 func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
-    var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 2)
+    var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 5)
     bulletsMessageBuffer[0] = 3 // message type bullets update
-    bulletsMessageBuffer[1] = byte(len(bullets))
-    message := bulletsMessageBuffer[2:]
+    binary.LittleEndian.PutUint32(bulletsMessageBuffer[1:], uint32(len(bullets)));
+    message := bulletsMessageBuffer[5:]
     for _, bullet := range bullets {
         binary.LittleEndian.PutUint32(message[0:], bullet.id);
         binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
@@ -343,6 +343,7 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
 func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*Tank) {
     // Destroy terrain
     // Use signed int math to make it possible to write equivalent js.
+    // TODO: dragons here
     sx := maxInt32(cx - r, 0)
     sy := maxInt32(cy - r, 0)
     ly := minInt32(cy + r, HEIGHT)
@@ -371,10 +372,10 @@ func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*
 }
 
 func isGroundInCircle(cx int32, cy int32, r int32, mapBitmap []byte) bool {
-    sx := maxInt32(cx - r, 0)
-    sy := maxInt32(cy - r, 0)
-    ly := minInt32(cy + r, HEIGHT)
-    lx := minInt32(cx + r, WIDTH)
+    sx := cx - r
+    sy := cy - r
+    ly := cy + r
+    lx := cx + r
     rs := r*r
     for y := sy; y < ly; y++ {
         for x := sx; x < lx; x++ {
@@ -396,6 +397,9 @@ func isGroundF(x float64, y float64, mapBitmap []byte) bool {
 }
 
 func isGroundI(x int32, y int32, mapBitmap []byte) bool {
+    if x <= 0 || y >= HEIGHT || x >= WIDTH {
+        return true
+    }
     index := x + y * WIDTH
     return index < 0 || int(index) >= len(mapBitmap) || mapBitmap[index] == 1
 }
