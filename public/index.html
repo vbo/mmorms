@@ -165,20 +165,21 @@
                             }
                             if (bullets.hasOwnProperty(deadId)) {
                                 var bullet = bullets[deadId];
-                                var explosion = new createjs.Bitmap("/explosion2.png");
-                                explosion.scaleX = 0.25;
-                                explosion.scaleY = 0.25;
+                                var explosion = new createjs.Bitmap("/explosion5.png");
+                                explosion.scaleX = 0.1;
+                                explosion.scaleY = 0.1;
                                 explosion.x = x;
                                 explosion.y = y;
+                                explosion.rotation = Math.random() * 360;
+                                console.log(explosion.rotation);
                                 render.stage.addChild(explosion);
-                                explosion.regX = 32;
-                                explosion.regY = 32;
+                                explosion.regX = 64;
+                                explosion.regY = 64;
                                 var times = 3;
                                 function animateExplosion() {
-                                    explosion.cache(0, 0, 64, 64);
                                     if (times > 0) {
-                                        explosion.scaleX += 0.5;
-                                        explosion.scaleY += 0.5;
+                                        explosion.scaleX += 0.2;
+                                        explosion.scaleY += 0.2;
                                         setTimeout(animateExplosion, 100);
                                         times--;
                                     } else {
