@@ -34,9 +34,6 @@ window.onload = function () {
         this.clientId = clientId;
         this.maxHp = hp;
         this.hp = this.maxHp;
-        this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
-            "11px Roboto",
-            "Red");
         this.shape = new createjs.Container();
         this.shape.regX = 0;
         this.shape.regY = 25;
@@ -44,6 +41,11 @@ window.onload = function () {
         this.shape.y = this.y;
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
         this.body = new createjs.Bitmap("/tank6-body.png");
+        this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
+            "11px Roboto",
+            "Red");
+        this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
+        this.shape.addChild(this.nickLabel);
         this.shape.addChild(this.gun);
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
@@ -54,6 +56,10 @@ window.onload = function () {
         this.body.regY = 25;
         this.hpLabel.regX = 20;
         this.hpLabel.regY = -35;
+        // TODO: Text-align center 
+        this.nickLabel.regX = 13;
+        this.nickLabel.regY = 25;
+        this.shape.addChild(this.nickLabel);
         render.stage.addChild(this.shape);
     }
 

@@ -20,7 +20,7 @@ type Tank struct {
 
 type Bullet struct {
     id uint32
-    owner uint32
+    ownerId uint32
     x, y float64
     vx, vy float64
 }
@@ -54,7 +54,7 @@ func NewTank() *Tank {
 
 func generateMapBitmap(mapBitmap []byte) {
     for x := 0; x < WIDTH; x++ {
-        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 110.0) + 1.2) * 100;
+        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 120.0) + 1.2) * 100;
         for y := 0; y < HEIGHT; y++ {
             if (float64(y) < groundCurve) {
                 mapBitmap[x + y * WIDTH] = 0;
@@ -112,7 +112,8 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     coordToPixel(bullet.x),
                     coordToPixel(bullet.y),
                     BULLET_RAD,
-                    tanks))  {
+                    tanks,
+                    bullet.ownerId))  {
                 broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
                 explodeAt(
                     coordToPixel(bullet.x),
@@ -120,7 +121,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     BULLET_EXPLOSION_RAD,
                     mapBitmap,
                     tanks,
-                    clients[bullet.owner])
+                    clients[bullet.ownerId])
                 log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
@@ -275,7 +276,7 @@ func gameLoop(net *Network) {
                             y := tanks[client.id].y - TANK_TOWER_HEIGHT * (1 - aimY)
                             bullets = append(bullets, Bullet{
                                 id: id,
-                                owner: client.id,
+                                ownerId: client.id,
                                 x: x,
                                 y: y,
                                 vx: vx,
@@ -308,7 +309,7 @@ func gameLoop(net *Network) {
         // world simulation 
         dtTotalSeconds := dtTotal.Seconds()
         simulateWorld(tanks, &bullets, mapBitmap, dtTotalSeconds, /* TODO(vbo): remove */ clients)
-    
+
         // Broadcast world snapshot
         broadcastTanks(tanks, clients)
         broadcastBullets(bullets, clients)
@@ -427,12 +428,12 @@ func explodeAt(cx int32,
     }
 }
 
-func isTankInCircle(cx int32, cy int32, r int32, tanks map[uint32]*Tank) bool {
-    for _, tank := range tanks {
+func isTankInCircle(cx int32, cy int32, r int32, tanks map[uint32]*Tank, ownerId uint32) bool {
+    for clientId, tank := range tanks {
         x := int32(tank.x)
         y := int32(tank.y)
         ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
-        if ds < r*r {
+        if ds < r*r && clientId != ownerId {
             return true
         }
     }
