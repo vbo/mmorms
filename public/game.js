@@ -41,9 +41,7 @@ window.onload = function () {
         this.shape.y = this.y;
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
         this.body = new createjs.Bitmap("/tank6-body.png");
-        this.hpLabel = new createjs.Text(this.hp + "/" + this.maxHp,
-            "11px Roboto",
-            "Red");
+        this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.shape.addChild(this.nickLabel);
         this.shape.addChild(this.gun);
@@ -54,7 +52,7 @@ window.onload = function () {
         this.gun.rotation = angle;
         this.body.regX = 47;
         this.body.regY = 25;
-        this.hpLabel.regX = 20;
+        this.hpLabel.regX = 10;
         this.hpLabel.regY = -35;
         // TODO: Text-align center 
         this.nickLabel.regX = 13;
@@ -69,7 +67,7 @@ window.onload = function () {
         this.hp = hp;
         this.shape.x = this.x;
         this.shape.y = this.y;
-        this.hpLabel.text = this.hp + "/" + this.maxHp;
+        this.hpLabel.text = this.hp;
         if (!me() || me().clientId != this.clientId) {
             this.gunAngle = angle;
             this.gun.rotation = angle;

@@ -36,6 +36,8 @@ const TANK_RAD = 15
 const TANK_SPEED = 20
 const TANK_TOWER_HEIGHT = 25
 const TANK_GUN_LENGTH = 30
+const TANK_WIDTH = 50
+const TANK_HEIGHT = 60
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -108,10 +110,9 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     coordToPixel(bullet.y),
                     BULLET_RAD,
                     mapBitmap) ||
-                isTankInCircle(
+                isPointInTank(
                     coordToPixel(bullet.x),
                     coordToPixel(bullet.y),
-                    BULLET_RAD,
                     tanks,
                     bullet.ownerId))  {
                 broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
@@ -428,12 +429,13 @@ func explodeAt(cx int32,
     }
 }
 
-func isTankInCircle(cx int32, cy int32, r int32, tanks map[uint32]*Tank, ownerId uint32) bool {
+func isPointInTank(cx int32, cy int32, tanks map[uint32]*Tank, ownerId uint32) bool {
     for clientId, tank := range tanks {
         x := int32(tank.x)
         y := int32(tank.y)
-        ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
-        if ds < r*r && clientId != ownerId {
+        if (clientId != ownerId &&
+            cx > x - TANK_WIDTH / 2 && cx  < x + TANK_WIDTH /2 &&
+            cy > y - TANK_HEIGHT / 2 && cy < y + TANK_HEIGHT /2) {
             return true
         }
     }
@@ -449,7 +451,7 @@ func isGroundInCircle(cx int32, cy int32, r int32, mapBitmap []byte) bool {
     for y := sy; y < ly; y++ {
         for x := sx; x < lx; x++ {
             if isGroundI(x, y, mapBitmap) {
-                ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
+                ds := (y-cy)*(y-cy) + (x-cx)*(x-cx)
                 if (ds < rs) {
                     return true
                 }
