@@ -253,6 +253,11 @@ window.onload = function () {
 
 
     window.addEventListener("keydown", function(e) {
+        if (e.code == "Enter" &&
+            document.getElementById("overlay").style.display != "none") {
+            onPlayButtonClicked();
+            return;
+        }
         if (!me()) {
             return;
         }
