@@ -40,9 +40,10 @@ func updateBot(bot *Bot) {
         default:
             var msgData []byte
             if rand.Intn(100) % 10 != 0 {
-                msgData = make([]byte, 2)
+                msgData = make([]byte, 6)
                 msgData[0] = 0
                 msgData [1] = (bot.strategy % 3) - 1
+                binary.LittleEndian.PutUint32(msgData[2:], uint32(rand.Intn(360)))
             } else {
                 msgData = make([]byte, 10)
                 msgData[0] = 1

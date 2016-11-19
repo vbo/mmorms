@@ -14,6 +14,7 @@ import (
 type Tank struct {
     x, y float64
     moving int8
+    gunAngle int32
     hp uint32
 }
 
@@ -31,14 +32,14 @@ const BULLET_SPEED = 20
 const GRAV_ACC = 30
 const GRAV_SPEED = 80
 const TANK_RAD = 15
-const TANK_SPEED = 10
+const TANK_SPEED = 20
 const TANK_TOWER_HEIGHT = 25
 const TANK_GUN_LENGTH = 30
 
 const WIDTH = 1260
 const HEIGHT = 620
 
-const NUM_BOTS = 20
+const NUM_BOTS = 1
 
 const TARGET_TICK_TIME = 20 * time.Millisecond
 
@@ -227,9 +228,8 @@ func gameLoop(net *Network) {
                         _, ok := tanks[client.id]
                         if ok {
                             tanks[client.id].moving = int8(message.data[1])
-                            //if tanks[client.id].moving != 0 {
-                            //    log.Printf("Client %d is moving %d", client.id, tanks[client.id].moving)
-                            //}
+                            tanks[client.id].gunAngle =
+                                int32(binary.LittleEndian.Uint32(message.data[2:]))
                         }
                     case 1: // shooting
                         aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
@@ -309,11 +309,12 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
         binary.LittleEndian.PutUint32(message[4:], uint32(tank.x))
         binary.LittleEndian.PutUint32(message[8:], uint32(tank.y))
         binary.LittleEndian.PutUint32(message[12:], uint32(tank.hp))
-        message = message[16:]
+        binary.LittleEndian.PutUint32(message[16:], uint32(tank.gunAngle))
+        message = message[20:]
     }
 
     for clientId, _ := range clients {
-        clients[clientId].outgoing <- stateMessageBuffer[0 : len(tanks) * 16 + 2]
+        clients[clientId].outgoing <- stateMessageBuffer[0 : len(tanks) * 20 + 2]
     }
 }
 

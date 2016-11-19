@@ -25,9 +25,10 @@
                     return tanks[myClientId];
                 }
 
-                function Tank (x, y, hp, clientId) {
+                function Tank (x, y, hp, angle, clientId) {
                     this.x = x;
                     this.y = y;
+                    this.gunAngle = angle;
                     this.clientId = clientId;
                     this.maxHp = hp;
                     this.hp = this.maxHp;
@@ -46,6 +47,7 @@
                     this.shape.addChild(this.hpLabel);
                     this.gun.regX = 46;
                     this.gun.regY = 25;
+                    this.gun.rotation = angle;
                     this.body.regX = 47;
                     this.body.regY = 25;
                     this.hpLabel.regX = 20;
@@ -53,13 +55,17 @@
                     render.stage.addChild(this.shape);
                 }
 
-                Tank.prototype.updateState = function(x, y, hp) {
+                Tank.prototype.updateState = function(x, y, hp, angle) {
                     this.x = x;
                     this.y = y;
                     this.hp = hp;
                     this.shape.x = this.x;
                     this.shape.y = this.y;
                     this.hpLabel.text = this.hp + "/" + this.maxHp;
+                    if (me().clientId != this.clientId) {
+                        this.gunAngle = angle;
+                        this.gun.rotation = angle;
+                    }
                 }
 
                 Tank.prototype.destroy = function() {
@@ -110,20 +116,23 @@
                             var clientsNum = messageByteView[1];
                             var messageView = new Int32Array(evt.data.slice(2));
                             for (i = 0; i < clientsNum; i++) {
-                                var clientId = messageView[i*4];
-                                var tankClientX = messageView[i*4 + 1];
-                                var tankClientY = messageView[i*4 + 2];
-                                var tankClientHp = messageView[i*4 + 3];
+                                var clientId = messageView[i*5];
+                                var tankClientX = messageView[i*5 + 1];
+                                var tankClientY = messageView[i*5 + 2];
+                                var tankClientHp = messageView[i*5 + 3];
+                                var tankGunAngle = messageView[i*5 + 4];
                                 if (!tanks[clientId]) {
                                     tanks[clientId] =
                                         new Tank(tankClientX,
                                             tankClientY,
                                             tankClientHp,
+                                            tankGunAngle,
                                             clientId);
                                 } else {
                                     tanks[clientId].updateState(tankClientX,
                                         tankClientY,
-                                        tankClientHp);
+                                        tankClientHp,
+                                        tankGunAngle);
                                 }
                             }
                             break;
@@ -278,12 +287,17 @@
                 });
 
                 setInterval(function() { // Sending packets to server
-                      var messageBuffer = new ArrayBuffer(2);
-                      var messageView = new Uint8Array(messageBuffer);
-                      messageView[0] = 0; // 0 - moving type of message
-                      messageView[1] = inputState.moving;
+                      var messageBuffer = new ArrayBuffer(6);
+                      var dataView = new DataView(messageBuffer);
+                      dataView.setUint8(0, 0);
+                      dataView.setUint8(1, inputState.moving);
+                      var rotation = 0;
+                      if (me()) {
+                          rotation = me().gun.rotation;
+                      }
+                      dataView.setInt32(2, rotation, true /* Little endian */);
                       if (conn.readyState === conn.OPEN) {
-                          conn.send(messageBuffer);
+                          conn.send(dataView);
                       } else {
                           //console.log("Still waiting for the conn to be established");
                       }
