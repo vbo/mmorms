@@ -245,8 +245,7 @@ window.onload = function () {
                         showLogin();
                     }
                     delete tanks[deadId];
-                }
-                if (bullets.hasOwnProperty(deadId)) {
+                } else if (bullets.hasOwnProperty(deadId)) {
                     var bullet = bullets[deadId];
                     var explosion = new createjs.Bitmap("/explosion5.png");
                     explosion.scaleX = 0.1;

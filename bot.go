@@ -6,6 +6,7 @@ import (
     "encoding/binary"
     "math/rand"
     "math"
+    "fmt"
 )
 
 const CHANNEL_SIZE = 8096
@@ -24,7 +25,7 @@ func createBot(net *Network) {
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
-        observer: false,
+        observer: true,
     }
     bot := &Bot {
         input: client.outgoing,
@@ -47,6 +48,10 @@ func updateBot(bot *Bot) {
             break
         }
     }
+
+    nickName := []byte(fmt.Sprintf(" Bot%d", bot.id))
+    bot.output <- Message { from: bot.id, data: nickName }
+
     for {
         select {
         case message := <-bot.input:
@@ -54,16 +59,12 @@ func updateBot(bot *Bot) {
             case MSG_OUT_DEATH:
                 deadId := binary.LittleEndian.Uint32(message[1:]) 
                 if (deadId == bot.id) {
-                    nickName := []byte("Bot")
-                    msgData := make([]byte, len(nickName) + 1)
-                    msgData[0] = 32
-                    copy(msgData[1:], nickName)
                     bot.gunAngleTarget = 0
                     bot.direction = 1
                     bot.gunAngle = 0
                     msg := Message {
                         from: bot.client.id,
-                        data: msgData,
+                        data: nickName,
                     }
                     bot.output <- msg
                 }
