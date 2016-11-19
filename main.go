@@ -126,7 +126,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
                 explodeAt(coordToPixel(tank.x), coordToPixel(tank.y), TANK_RAD, mapBitmap, tanks)
-                tanks[tankID] = NewTank() // Respawn!
+                delete(tanks, tankID)
             }
         }
     }
@@ -255,6 +255,15 @@ func gameLoop(net *Network) {
                             vy: vy,
                         })
                         //log.Printf("New wild bullet created %d", id)
+                    case 32: // start
+                        var clientID = message.from
+                        _, ok := tanks[clientID]
+                        if !ok {
+                            var login = string(message.data[1:])
+                            log.Printf("%s joined", login)
+                            tanks[clientID] = NewTank()
+                        }
+
                     // TODO(vbo): what if no cases match message type?
                 }
                 if msgNum == 0 {

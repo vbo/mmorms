@@ -98,7 +98,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
-        observer: false,
+        observer: true,
     }
 
     defer func () {

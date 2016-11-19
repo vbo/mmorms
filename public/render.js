@@ -9,7 +9,7 @@
         this.ctx = canvas.getContext('2d');
         this.maskImageData = this.ctx.createImageData(width, height);
         var bgSky = new createjs.Shape();
-        bgSky.graphics.beginFill("white").drawRect(0, 0, width, height);
+        bgSky.graphics.beginFill("lightcyan").drawRect(0, 0, width, height);
         this.stage.addChild(bgSky);
 
         // Background "theme" image.
