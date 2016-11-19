@@ -5,6 +5,7 @@ import (
     "time"
     "encoding/binary"
     "math/rand"
+    "math"
 )
 
 const CHANNEL_SIZE = 8096
@@ -13,6 +14,7 @@ type Bot struct {
     input chan []byte
     output chan Message
     strategy byte
+    gunAngle int32
     client *Client
 }
 
@@ -27,6 +29,7 @@ func createBot(net *Network) {
         output: net.incoming,
         client: client,
         strategy: byte(rand.Intn(255)),
+        gunAngle: 0,
     }
     net.connect <- client
     log.Println("Bot client connecting...")
@@ -43,12 +46,16 @@ func updateBot(bot *Bot) {
                 msgData = make([]byte, 6)
                 msgData[0] = 0
                 msgData [1] = (bot.strategy % 3) - 1
-                binary.LittleEndian.PutUint32(msgData[2:], uint32(rand.Intn(360)))
+                bot.gunAngle += int32(rand.Intn(11) - 5)
+                binary.LittleEndian.PutUint32(msgData[2:], uint32(bot.gunAngle))
             } else {
                 msgData = make([]byte, 10)
                 msgData[0] = 1
-                binary.LittleEndian.PutUint32(msgData[1:], uint32(rand.Intn(255) - 128))
-                binary.LittleEndian.PutUint32(msgData[5:], uint32(rand.Intn(255) - 255))
+                x := 128 * math.Cos(float64(bot.gunAngle) * math.Pi / 180)
+                y := 128 * math.Sin(float64(bot.gunAngle) * math.Pi / 180)
+                log.Printf("%d angle, %f,%f", bot.gunAngle, x, y)
+                binary.LittleEndian.PutUint32(msgData[1:], uint32(x))
+                binary.LittleEndian.PutUint32(msgData[5:], uint32(y))
                 msgData[9] = uint8(rand.Intn(5) + 5)
             }
             msg := Message {

@@ -53,7 +53,7 @@ func NewTank() *Tank {
 
 func generateMapBitmap(mapBitmap []byte) {
     for x := 0; x < WIDTH; x++ {
-        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 100.0) + 1.2) * 100;
+        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 110.0) + 1.2) * 100;
         for y := 0; y < HEIGHT; y++ {
             if (float64(y) < groundCurve) {
                 mapBitmap[x + y * WIDTH] = 0;
