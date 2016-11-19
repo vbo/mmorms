@@ -179,6 +179,7 @@
                                 tanks[deadId].destroy();
                                 if (deadId == myClientId) {
                                     inputState.direction = 1;
+                                    inputState.power = 0;
                                     showLogin();
                                 }
                                 delete tanks[deadId];
@@ -232,7 +233,7 @@
                 }
 
                 function getShootingPower(inputState) {
-                    var power = Math.floor((Date.now() - inputState.power) / 300);
+                    var power = Math.floor((Date.now() - inputState.power) / 200);
                     if (power <= 0) {
                         power = 1;
                     }
@@ -244,6 +245,9 @@
 
 
                 window.addEventListener("keydown", function(e) {
+                    if (!me()) {
+                        return;
+                    }
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                         var newDir = (e.code == "ArrowLeft") ? -1 : 1;
                         if (inputState.direction != newDir) {
@@ -264,7 +268,6 @@
                                 }
                                 var power = getShootingPower(inputState);
                                 me().gun.filters = [new createjs.ColorFilter(1, 1, 1, 1, power/10*150, 0, 0, 0)];
-                                console.log(power);
                                 me().gun.cache(0, 0, 100, 100);
                                 setTimeout(updateGun, 100);
                             }
@@ -274,6 +277,9 @@
                 });
 
                 window.addEventListener("keyup", function(e) {
+                    if (!me()) {
+                        return;
+                    }
                     if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
                       inputState.moving = 0;
                     }

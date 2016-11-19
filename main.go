@@ -20,6 +20,7 @@ type Tank struct {
 
 type Bullet struct {
     id uint32
+    owner uint32
     x, y float64
     vx, vy float64
 }
@@ -47,7 +48,7 @@ func NewTank() *Tank {
     return &Tank{
         x: float64(rand.Intn(WIDTH)),
         y: 20,
-        hp: 300,
+        hp: 100,
     }
 }
 
@@ -113,7 +114,13 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     BULLET_RAD,
                     tanks))  {
                 broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
-                explodeAt(coordToPixel(bullet.x), coordToPixel(bullet.y), BULLET_EXPLOSION_RAD, mapBitmap, tanks)
+                explodeAt(
+                    coordToPixel(bullet.x),
+                    coordToPixel(bullet.y),
+                    BULLET_EXPLOSION_RAD,
+                    mapBitmap,
+                    tanks,
+                    clients[bullet.owner])
                 log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
@@ -125,7 +132,13 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
         for tankID, tank := range tanks {
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(coordToPixel(tank.x), coordToPixel(tank.y), TANK_RAD, mapBitmap, tanks)
+                explodeAt(
+                    coordToPixel(tank.x),
+                    coordToPixel(tank.y),
+                    TANK_RAD,
+                    mapBitmap,
+                    tanks,
+                    clients[tankID])
                 delete(tanks, tankID)
             }
         }
@@ -193,7 +206,13 @@ func gameLoop(net *Network) {
             tank, ok := tanks[client.id]
             if ok {
                 broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(coordToPixel(tank.x), coordToPixel(tank.y), TANK_RAD, mapBitmap, tanks)
+                explodeAt(
+                    coordToPixel(tank.x),
+                    coordToPixel(tank.y),
+                    TANK_RAD,
+                    mapBitmap,
+                    tanks,
+                    client)
                 delete(tanks, client.id)
             }
             delete(clients, client.id)
@@ -201,7 +220,11 @@ func gameLoop(net *Network) {
             log.Printf("Client %d disconnected.", client.id)
         case statsRequest := <- net.statsRequests:
             for _, client := range clients {
-                fmt.Fprintf(statsRequest.w, "%d\t%f\n", client.id, client.ping)
+                fmt.Fprintf(statsRequest.w,
+                            "%d\t%f\t%d\n",
+                            client.id,
+                            client.ping,
+                            client.frags)
             }
             statsRequest.done <- true
         case message := <-net.incoming:
@@ -233,29 +256,33 @@ func gameLoop(net *Network) {
                         }
 
                     case 1: // shooting
-                        aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
-                        aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
-                        power := float64(message.data[9])
-                        if power <= 0 {
-                            power = 1
-                        } else if power > 10 {
-                            power = 10
+                        _, ok := tanks[client.id]
+                        if ok {
+                            aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
+                            aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
+                            power := float64(message.data[9])
+                            if power <= 0 {
+                                power = 1
+                            } else if power > 10 {
+                                power = 10
+                            }
+                            aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
+                            aimX /= aimLen; aimY /= aimLen
+                            vx := BULLET_SPEED * aimX * power
+                            vy := BULLET_SPEED * aimY * power
+                            id := net.GetNewObjectId()
+                            x := tanks[client.id].x + TANK_GUN_LENGTH * aimX
+                            y := tanks[client.id].y - TANK_TOWER_HEIGHT * (1 - aimY)
+                            bullets = append(bullets, Bullet{
+                                id: id,
+                                owner: client.id,
+                                x: x,
+                                y: y,
+                                vx: vx,
+                                vy: vy,
+                            })
+                            //log.Printf("New wild bullet created %d", id)
                         }
-                        aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
-                        aimX /= aimLen; aimY /= aimLen
-                        vx := BULLET_SPEED * aimX * power
-                        vy := BULLET_SPEED * aimY * power
-                        id := net.GetNewObjectId()
-                        x := tanks[client.id].x + TANK_GUN_LENGTH * aimX
-                        y := tanks[client.id].y - TANK_TOWER_HEIGHT * (1 - aimY)
-                        bullets = append(bullets, Bullet{
-                            id: id,
-                            x: x,
-                            y: y,
-                            vx: vx,
-                            vy: vy,
-                        })
-                        //log.Printf("New wild bullet created %d", id)
 
                     case 32: // start
                         var clientID = message.from
@@ -361,7 +388,12 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     log.Printf("Object %d died bravely", id)
 }
 
-func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*Tank) {
+func explodeAt(cx int32,
+               cy int32,
+               r int32,
+               mapBitmap []byte,
+               tanks map[uint32]*Tank,
+               owner *Client) {
     // Destroy terrain
     // Use signed int math to make it possible to write equivalent js.
     // TODO: dragons here
@@ -387,6 +419,9 @@ func explodeAt(cx int32, cy int32, r int32, mapBitmap []byte, tanks map[uint32]*
         if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
+            if (tanks[tankID].hp <= 0 && tankID != owner.id) {
+                owner.frags++
+            }
             log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }
     }
