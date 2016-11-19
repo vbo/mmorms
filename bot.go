@@ -11,6 +11,7 @@ import (
 const CHANNEL_SIZE = 8096
 
 type Bot struct {
+    id uint32
     input chan []byte
     output chan Message
     strategy byte
@@ -38,8 +39,32 @@ func createBot(net *Network) {
 
 func updateBot(bot *Bot) {
     for {
+        message := <-bot.input
+        if (message[0] == 2) {
+            bot.id = binary.LittleEndian.Uint32(message[1:])
+            log.Printf("I know my id, it's %d", bot.id)
+            break
+        }
+    }
+    for {
         select {
-        case <-bot.input:
+        case message := <-bot.input:
+            switch message[0] {
+            case 4:
+                deadId := binary.LittleEndian.Uint32(message[1:]) 
+                if (deadId == bot.id) {
+                    log.Println("Goodbye cruel world")
+                    nickName := []byte("Bot")
+                    msgData := make([]byte, len(nickName) + 1)
+                    msgData[0] = 32
+                    copy(msgData[1:], nickName)
+                    msg := Message {
+                        from: bot.client.id,
+                        data: msgData,
+                    }
+                    bot.output <- msg
+                }
+            }
         default:
             var msgData []byte
             if rand.Intn(100) % 10 != 0 {

@@ -39,7 +39,7 @@ const TANK_GUN_LENGTH = 30
 const WIDTH = 1260
 const HEIGHT = 620
 
-const NUM_BOTS = 1
+const NUM_BOTS = 5
 
 const TARGET_TICK_TIME = 20 * time.Millisecond
 
@@ -231,6 +231,7 @@ func gameLoop(net *Network) {
                             tanks[client.id].gunAngle =
                                 int32(binary.LittleEndian.Uint32(message.data[2:]))
                         }
+
                     case 1: // shooting
                         aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                         aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
@@ -255,6 +256,7 @@ func gameLoop(net *Network) {
                             vy: vy,
                         })
                         //log.Printf("New wild bullet created %d", id)
+
                     case 32: // start
                         var clientID = message.from
                         _, ok := tanks[clientID]
