@@ -14,8 +14,9 @@ type Bot struct {
     id uint32
     input chan []byte
     output chan Message
-    strategy byte
+    direction byte
     gunAngle int32
+    gunAngleTarget int32
     client *Client
 }
 
@@ -29,8 +30,9 @@ func createBot(net *Network) {
         input: client.outgoing,
         output: net.incoming,
         client: client,
-        strategy: byte(rand.Intn(255)),
+        direction: 1,
         gunAngle: 0,
+        gunAngleTarget: 0,
     }
     net.connect <- client
     log.Println("Bot client connecting...")
@@ -42,7 +44,6 @@ func updateBot(bot *Bot) {
         message := <-bot.input
         if (message[0] == 2) {
             bot.id = binary.LittleEndian.Uint32(message[1:])
-            log.Printf("I know my id, it's %d", bot.id)
             break
         }
     }
@@ -50,14 +51,16 @@ func updateBot(bot *Bot) {
         select {
         case message := <-bot.input:
             switch message[0] {
-            case 4:
+            case MSG_OUT_DEATH:
                 deadId := binary.LittleEndian.Uint32(message[1:]) 
                 if (deadId == bot.id) {
-                    log.Println("Goodbye cruel world")
                     nickName := []byte("Bot")
                     msgData := make([]byte, len(nickName) + 1)
                     msgData[0] = 32
                     copy(msgData[1:], nickName)
+                    bot.gunAngleTarget = 0
+                    bot.direction = 1
+                    bot.gunAngle = 0
                     msg := Message {
                         from: bot.client.id,
                         data: msgData,
@@ -67,21 +70,35 @@ func updateBot(bot *Bot) {
             }
         default:
             var msgData []byte
-            if rand.Intn(100) % 10 != 0 {
+            rnd := rand.Intn(100)
+            if rnd % 20 != 0 {
                 msgData = make([]byte, 6)
-                msgData[0] = 0
-                msgData [1] = (bot.strategy % 3) - 1
-                bot.gunAngle += int32(rand.Intn(11) - 5)
+                msgData[0] = MSG_IN_MOVING
+                msgData [1] = bot.direction
+                gunAngleDiff := float64(bot.gunAngleTarget - bot.gunAngle)
+                if (gunAngleDiff != 0) {
+                    bot.gunAngle += int32(gunAngleDiff / math.Abs(gunAngleDiff))
+                }
                 binary.LittleEndian.PutUint32(msgData[2:], uint32(bot.gunAngle))
             } else {
                 msgData = make([]byte, 10)
-                msgData[0] = 1
+                msgData[0] = MSG_IN_SHOOTING
                 x := 128 * math.Cos(float64(bot.gunAngle) * math.Pi / 180)
                 y := 128 * math.Sin(float64(bot.gunAngle) * math.Pi / 180)
-                log.Printf("%d angle, %f,%f", bot.gunAngle, x, y)
                 binary.LittleEndian.PutUint32(msgData[1:], uint32(x))
                 binary.LittleEndian.PutUint32(msgData[5:], uint32(y))
                 msgData[9] = uint8(rand.Intn(5) + 5)
+            }
+            if rand.Intn(100) % 10 == 0 {
+                direction := byte((rnd % 3) - 1)
+                if direction != bot.direction && direction != 0 {
+                    bot.gunAngle = 180 - bot.gunAngle
+                    bot.gunAngleTarget = 180 - bot.gunAngleTarget
+                }
+                bot.direction = direction
+            }
+            if rand.Intn(100) % 8 == 0 {
+                bot.gunAngleTarget= int32(rand.Intn(180)) - 90
             }
             msg := Message {
                 from: bot.client.id,

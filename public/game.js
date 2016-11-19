@@ -4,8 +4,20 @@ window.onload = function () {
     var tanks = {};
     var bullets = {};
     var mapBitmap;
+
     var WIDTH = 1260;
     var HEIGHT = 620;
+
+    var MSG_IN_GREETING = 2
+    var MSG_IN_DEATH = 4
+    var MSG_IN_STATE = 1
+    var MSG_IN_MAP = 0
+    var MSG_IN_BULLET_STATE = 3
+
+    var MSG_OUT_MOVING = 0
+    var MSG_OUT_SHOOTING = 1
+    var MSG_OUT_START = 32
+
     var inputState = {
       moving: 0,
       power: 0,
@@ -114,11 +126,11 @@ window.onload = function () {
             // TODO: Replace with DataView
             var messageByteView = new Uint8Array(evt.data);
             switch (dataView.getUint8(0)) {
-            case 0: // map update
+            case MSG_IN_MAP: // map update
                 mapBitmap = new Int8Array(evt.data, 1); 
                 render.updateMapCanvas(mapBitmap);
                 break;
-            case 1: // state update
+            case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
                 var messageView = new Int32Array(evt.data.slice(2));
                 for (i = 0; i < clientsNum; i++) {
@@ -142,11 +154,11 @@ window.onload = function () {
                     }
                 }
                 break;
-            case 2: // greetings message
+            case MSG_IN_GREETING:
                 myClientId = (new Int32Array(evt.data.slice(1)))[0];
                 console.log("I am " + myClientId);
                 break;
-            case 3: // bullets update
+            case MSG_IN_BULLET_STATE:
                 var bulletsNum = dataView.getUint32(1, true);
                 var headerOffset = 5;
                 for (i = 0; i < bulletsNum; i++) {
@@ -161,7 +173,7 @@ window.onload = function () {
                     }
                 }
                 break;
-            case 4: // death message
+            case MSG_IN_DEATH:
                 var messageData = new Int32Array(evt.data.slice(1));
                 var deadId = messageData[0],
                     x = messageData[1],
@@ -287,7 +299,7 @@ window.onload = function () {
                 aimY = Math.sin(a) * 1000;
             var messageBuffer = new ArrayBuffer(10);
             var dataView = new DataView(messageBuffer);
-            dataView.setUint8(0, 1);
+            dataView.setUint8(0, MSG_OUT_SHOOTING);
             dataView.setInt32(1, aimX, true /* little endian */);
             dataView.setInt32(5, aimY, true /* little endian */);
             dataView.setUint8(9, inputState.power);
@@ -302,7 +314,7 @@ window.onload = function () {
     setInterval(function() { // Sending packets to server
           var messageBuffer = new ArrayBuffer(6);
           var dataView = new DataView(messageBuffer);
-          dataView.setUint8(0, 0);
+          dataView.setUint8(0, MSG_OUT_MOVING);
           dataView.setUint8(1, inputState.moving);
           var rotation = 0;
           if (me()) {

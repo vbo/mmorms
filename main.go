@@ -27,20 +27,33 @@ type Bullet struct {
 
 const EXPLOSION_DMG = 100
 const EXPLOSION_DMG_FALLOFF = 2
+
 const BULLET_EXPLOSION_RAD = 30
 const BULLET_RAD = 5
 const BULLET_SPEED = 20
+
 const GRAV_ACC = 30
-const GRAV_SPEED = 80
+const GRAV_SPEED = 100
+
 const TANK_RAD = 15
 const TANK_SPEED = 20
 const TANK_TOWER_HEIGHT = 25
 const TANK_GUN_LENGTH = 30
 const TANK_WIDTH = 50
-const TANK_HEIGHT = 60
+const TANK_HEIGHT = 20
 
 const WIDTH = 1260
 const HEIGHT = 620
+
+const MSG_OUT_MAP = 0
+const MSG_OUT_GREETING = 2
+const MSG_OUT_DEATH = 4
+const MSG_OUT_STATE = 1
+const MSG_OUT_BULLET_STATE = 3
+
+const MSG_IN_MOVING = 0
+const MSG_IN_SHOOTING = 1
+const MSG_IN_START = 32
 
 const NUM_BOTS = 5
 
@@ -123,7 +136,7 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     mapBitmap,
                     tanks,
                     clients[bullet.ownerId])
-                log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
+                //log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
             } else {
@@ -154,7 +167,7 @@ func gameLoop(net *Network) {
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
-    mapBitmapBuffer[0] = 0 // type of message mapBitmap init
+    mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
 
     // TODO(vbo): load from predesigned file?
@@ -195,7 +208,7 @@ func gameLoop(net *Network) {
         case client := <-net.connect:
             clients[client.id] = client
             var greetingMsg [5]byte
-            greetingMsg[0] = 2
+            greetingMsg[0] = MSG_OUT_GREETING
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
             //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
@@ -249,7 +262,7 @@ func gameLoop(net *Network) {
                 }
                 client.ping = message.ping
                 switch message.data[0] {
-                    case 0: // moving
+                    case MSG_IN_MOVING: // moving
                         _, ok := tanks[client.id]
                         if ok {
                             tanks[client.id].moving = int8(message.data[1])
@@ -257,7 +270,7 @@ func gameLoop(net *Network) {
                                 int32(binary.LittleEndian.Uint32(message.data[2:]))
                         }
 
-                    case 1: // shooting
+                    case MSG_IN_SHOOTING: // shooting
                         _, ok := tanks[client.id]
                         if ok {
                             aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
@@ -286,7 +299,7 @@ func gameLoop(net *Network) {
                             //log.Printf("New wild bullet created %d", id)
                         }
 
-                    case 32: // start
+                    case MSG_IN_START: // start
                         var clientID = message.from
                         _, ok := tanks[clientID]
                         if !ok {
@@ -341,7 +354,7 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
     //  - A different solution is to preallocate a pool
     //    of reference counted arenas.
     var stateMessageBuffer [2042]byte
-    stateMessageBuffer[0] = 1 // message type state update
+    stateMessageBuffer[0] = MSG_OUT_STATE
     stateMessageBuffer[1] = byte(len(tanks))
     message := stateMessageBuffer[2:]
     for tankId, tank := range tanks {
@@ -360,7 +373,7 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
 
 func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
     var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 5)
-    bulletsMessageBuffer[0] = 3 // message type bullets update
+    bulletsMessageBuffer[0] = MSG_OUT_BULLET_STATE
     binary.LittleEndian.PutUint32(bulletsMessageBuffer[1:], uint32(len(bullets)));
     message := bulletsMessageBuffer[5:]
     for _, bullet := range bullets {
@@ -378,7 +391,7 @@ func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
 func broadcastDeath(id uint32, x float64, y float64, radius uint32,
                     clients map[uint32]*Client) {
     var buffer [17]byte
-    buffer[0] = 4 // message type death 
+    buffer[0] = MSG_OUT_DEATH
     message := buffer[1:]
     binary.LittleEndian.PutUint32(message[0:], id);
     binary.LittleEndian.PutUint32(message[4:], uint32(x));
@@ -387,7 +400,7 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     for clientId, _ := range clients {
         clients[clientId].outgoing <- buffer[0:]
     }
-    log.Printf("Object %d died bravely", id)
+    //log.Printf("Object %d died bravely", id)
 }
 
 func explodeAt(cx int32,
@@ -424,7 +437,7 @@ func explodeAt(cx int32,
             if (tanks[tankID].hp <= 0 && tankID != owner.id) {
                 owner.frags++
             }
-            log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
+            //log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }
     }
 }
@@ -435,7 +448,7 @@ func isPointInTank(cx int32, cy int32, tanks map[uint32]*Tank, ownerId uint32) b
         y := int32(tank.y)
         if (clientId != ownerId &&
             cx > x - TANK_WIDTH / 2 && cx  < x + TANK_WIDTH /2 &&
-            cy > y - TANK_HEIGHT / 2 && cy < y + TANK_HEIGHT /2) {
+            cy > y - TANK_HEIGHT  && cy <= y ) {
             return true
         }
     }
