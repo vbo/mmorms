@@ -45,15 +45,21 @@ const TANK_HEIGHT = 20
 const WIDTH = 1260
 const HEIGHT = 620
 
-const MSG_OUT_MAP = 0
-const MSG_OUT_GREETING = 2
-const MSG_OUT_DEATH = 4
-const MSG_OUT_STATE = 1
-const MSG_OUT_BULLET_STATE = 3
+const (
+    MSG_OUT_MAP = 0
+    MSG_OUT_STATE = 1
+    MSG_OUT_GREETING = 2
+    MSG_OUT_BULLET_STATE = 3
+    MSG_OUT_DEATH = 4
+    MSG_OUT_LEADERBOARD = 5
+    MSG_OUT_PING = 80
+)
 
-const MSG_IN_MOVING = 0
-const MSG_IN_SHOOTING = 1
-const MSG_IN_START = 32
+const (
+    MSG_IN_MOVING = 0
+    MSG_IN_SHOOTING = 1
+    MSG_IN_START = 32
+)
 
 const NUM_BOTS = 5
 
@@ -69,12 +75,12 @@ func NewTank() *Tank {
 
 func generateMapBitmap(mapBitmap []byte) {
     for x := 0; x < WIDTH; x++ {
-        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 120.0) + 1.2) * 100;
+        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 120.0) + 1.2) * 100
         for y := 0; y < HEIGHT; y++ {
             if (float64(y) < groundCurve) {
-                mapBitmap[x + y * WIDTH] = 0;
+                mapBitmap[x + y * WIDTH] = 0
             } else {
-                mapBitmap[x + y * WIDTH] = 1;
+                mapBitmap[x + y * WIDTH] = 1
             }
         }
     }
@@ -209,7 +215,7 @@ func gameLoop(net *Network) {
             clients[client.id] = client
             var greetingMsg [5]byte
             greetingMsg[0] = MSG_OUT_GREETING
-            binary.LittleEndian.PutUint32(greetingMsg[1:], client.id);
+            binary.LittleEndian.PutUint32(greetingMsg[1:], client.id)
             //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
             client.outgoing <- mapBitmapBufferCopy[0:]
@@ -300,12 +306,11 @@ func gameLoop(net *Network) {
                         }
 
                     case MSG_IN_START: // start
-                        var clientID = message.from
-                        _, ok := tanks[clientID]
+                        _, ok := tanks[client.id]
                         if !ok {
-                            var login = string(message.data[1:])
-                            log.Printf("%s joined", login)
-                            tanks[clientID] = NewTank()
+                            client.name = message.data[1:]
+                            log.Printf("%s joined", string(client.name))
+                            tanks[client.id] = NewTank()
                         }
 
                     // TODO(vbo): what if no cases match message type?
@@ -327,6 +332,7 @@ func gameLoop(net *Network) {
         // Broadcast world snapshot
         broadcastTanks(tanks, clients)
         broadcastBullets(bullets, clients)
+        broadcastLeaderboard(clients)
 
         // Bookkeeping
         newTime := time.Now()
@@ -338,6 +344,35 @@ func gameLoop(net *Network) {
 
         // TODO: improve sleep precision
         time.Sleep(TARGET_TICK_TIME - dtTotal)
+    }
+}
+
+func broadcastLeaderboard(clients map[uint32]*Client) {
+    namesLen := 0
+    namedClientsCount := 0
+    for _, client := range clients {
+        nameLen := len(client.name)
+        if nameLen > 0 {
+            namesLen += nameLen
+            namedClientsCount++
+        }
+    }
+    messageLen := 5 + (9 * namedClientsCount) + namesLen
+    messageBuffer := make([]byte, messageLen)
+    messageBuffer[0] = MSG_OUT_LEADERBOARD
+    binary.LittleEndian.PutUint32(messageBuffer[1:], uint32(namedClientsCount))
+    message := messageBuffer[5:]
+    for _, client := range clients {
+        nameLen := byte(len(client.name))
+        if nameLen == 0 { continue }
+        binary.LittleEndian.PutUint32(message[0:], client.id)
+        binary.LittleEndian.PutUint32(message[4:], uint32(client.frags))
+        message[8] = nameLen
+        copy(message[9:], client.name)
+        message = message[9 + nameLen:]
+    }
+    for _, client := range clients {
+        client.outgoing <- messageBuffer[0 : messageLen]
     }
 }
 
@@ -353,36 +388,34 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
     //    the data pointer with the actual curTick at the send time.
     //  - A different solution is to preallocate a pool
     //    of reference counted arenas.
-    var stateMessageBuffer [2042]byte
+    stateMessageBuffer := make([]byte, 2 + len(tanks) * 20)
     stateMessageBuffer[0] = MSG_OUT_STATE
     stateMessageBuffer[1] = byte(len(tanks))
     message := stateMessageBuffer[2:]
     for tankId, tank := range tanks {
-        binary.LittleEndian.PutUint32(message[0:], tankId);
+        binary.LittleEndian.PutUint32(message[0:], tankId)
         binary.LittleEndian.PutUint32(message[4:], uint32(tank.x))
         binary.LittleEndian.PutUint32(message[8:], uint32(tank.y))
         binary.LittleEndian.PutUint32(message[12:], uint32(tank.hp))
         binary.LittleEndian.PutUint32(message[16:], uint32(tank.gunAngle))
         message = message[20:]
     }
-
-    for clientId, _ := range clients {
-        clients[clientId].outgoing <- stateMessageBuffer[0 : len(tanks) * 20 + 2]
+    for _, client := range clients {
+        client.outgoing <- stateMessageBuffer[0 : len(stateMessageBuffer)]
     }
 }
 
 func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
     var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 5)
     bulletsMessageBuffer[0] = MSG_OUT_BULLET_STATE
-    binary.LittleEndian.PutUint32(bulletsMessageBuffer[1:], uint32(len(bullets)));
+    binary.LittleEndian.PutUint32(bulletsMessageBuffer[1:], uint32(len(bullets)))
     message := bulletsMessageBuffer[5:]
     for _, bullet := range bullets {
-        binary.LittleEndian.PutUint32(message[0:], bullet.id);
+        binary.LittleEndian.PutUint32(message[0:], bullet.id)
         binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
         binary.LittleEndian.PutUint32(message[8:], uint32(bullet.y))
         message = message[12:]
     }
-
     for clientId, _ := range clients {
         clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bulletsMessageBuffer)]
     }
@@ -393,10 +426,10 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     var buffer [17]byte
     buffer[0] = MSG_OUT_DEATH
     message := buffer[1:]
-    binary.LittleEndian.PutUint32(message[0:], id);
-    binary.LittleEndian.PutUint32(message[4:], uint32(x));
-    binary.LittleEndian.PutUint32(message[8:], uint32(y));
-    binary.LittleEndian.PutUint32(message[12:], radius);
+    binary.LittleEndian.PutUint32(message[0:], id)
+    binary.LittleEndian.PutUint32(message[4:], uint32(x))
+    binary.LittleEndian.PutUint32(message[8:], uint32(y))
+    binary.LittleEndian.PutUint32(message[12:], radius)
     for clientId, _ := range clients {
         clients[clientId].outgoing <- buffer[0:]
     }
@@ -419,9 +452,9 @@ func explodeAt(cx int32,
     rs := r*r
     for y := sy; y < ly; y++ {
         for x := sx; x < lx; x++ {
-            ds := (y-cy)*(y-cy) + (x-cx)*(x-cx);
+            ds := (y-cy)*(y-cy) + (x-cx)*(x-cx)
             if ds < rs {
-                mapBitmap[uint32(x) + uint32(y) * WIDTH] = 0;
+                mapBitmap[uint32(x) + uint32(y) * WIDTH] = 0
             }
         }
     }
@@ -434,7 +467,7 @@ func explodeAt(cx int32,
         if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
-            if (tanks[tankID].hp <= 0 && tankID != owner.id) {
+            if (owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id) {
                 owner.frags++
             }
             //log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)

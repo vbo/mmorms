@@ -4,15 +4,17 @@ window.onload = function () {
     var tanks = {};
     var bullets = {};
     var mapBitmap;
+    var utf8decoder = new TextDecoder("utf-8");
 
     var WIDTH = 1260;
     var HEIGHT = 620;
 
-    var MSG_IN_GREETING = 2
-    var MSG_IN_DEATH = 4
-    var MSG_IN_STATE = 1
     var MSG_IN_MAP = 0
+    var MSG_IN_STATE = 1
+    var MSG_IN_GREETING = 2
     var MSG_IN_BULLET_STATE = 3
+    var MSG_IN_DEATH = 4
+    var MSG_IN_LEADERBOARD = 5
 
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
@@ -31,7 +33,7 @@ window.onload = function () {
     }
 
     window.sendStart = function (login) {
-        conn.send(" " + login);
+        conn.send(String.fromCharCode(MSG_OUT_START) + login);
     }
 
     window.showLogin = function () {
@@ -55,7 +57,8 @@ window.onload = function () {
         this.body = new createjs.Bitmap("/tank6-body.png");
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
-        this.shape.addChild(this.nickLabel);
+        this.nickLabel.textAlign = "center";
+        this.nickLabel.maxWidth = 100;
         this.shape.addChild(this.gun);
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
@@ -67,7 +70,6 @@ window.onload = function () {
         this.hpLabel.regX = 10;
         this.hpLabel.regY = -35;
         // TODO: Text-align center 
-        this.nickLabel.regX = 13;
         this.nickLabel.regY = 25;
         this.shape.addChild(this.nickLabel);
         render.stage.addChild(this.shape);
@@ -84,6 +86,10 @@ window.onload = function () {
             this.gunAngle = angle;
             this.gun.rotation = angle;
         }
+    }
+
+    Tank.prototype.updateName = function (name) {
+        this.nickLabel.text = name;
     }
 
     Tank.prototype.destroy = function() {
@@ -107,6 +113,36 @@ window.onload = function () {
         this.y = y;
         this.shape.x = this.x;
         this.shape.y = this.y;
+    }
+
+    var MAX_LEADERS = 10;
+    function LeaderboardEntry(id, name, frags) {
+        this.id = id;
+        this.name = name;
+        this.frags = frags;
+    }
+    LeaderboardEntry.compare = function (x, y) {
+        var dfrag = y.frags - x.frags;
+        if (dfrag) return dfrag;
+        return y.id - x.id;
+    }
+
+    var leaderboardLines = [];
+    for (var i = 0; i < MAX_LEADERS; i++) {
+        var line = new createjs.Text("hello", "9px Roboto", "Red");
+        line.y = i * 12;
+        render.stage.addChild(line);
+        leaderboardLines[i] = line;
+    }
+    function updateLeaderboard(entries) {
+        entries.sort(LeaderboardEntry.compare);
+        for (var i = 0; i < Math.min(entries.length, MAX_LEADERS); i++) {
+            var leader = entries[i];
+            leaderboardLines[i].text = leader.name + "\t" + leader.frags;
+        }
+        for (;i < MAX_LEADERS; i++) {
+            leaderboardLines[i].text = "";
+        }
     }
 
     if (window["WebSocket"]) {
@@ -133,7 +169,7 @@ window.onload = function () {
             case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
                 var messageView = new Int32Array(evt.data.slice(2));
-                for (i = 0; i < clientsNum; i++) {
+                for (var i = 0; i < clientsNum; i++) {
                     var clientId = messageView[i*5];
                     var tankClientX = messageView[i*5 + 1];
                     var tankClientY = messageView[i*5 + 2];
@@ -154,6 +190,24 @@ window.onload = function () {
                     }
                 }
                 break;
+            case MSG_IN_LEADERBOARD:
+                var clientsNum = dataView.getUint32(1, true);
+                var leaderboard = new Array(clientsNum);
+                var p = 5;
+                for (var i = 0; i < clientsNum; i++) {
+                    var id = dataView.getUint32(p, true);
+                    var frags = dataView.getUint32(p + 4, true);
+                    var nameLen = dataView.getUint8(p + 8);
+                    var nameView = new DataView(evt.data, p + 9, nameLen);
+                    var name = utf8decoder.decode(nameView);
+                    if (tanks[id]) {
+                        tanks[id].updateName(name);
+                    }
+                    leaderboard[i] = new LeaderboardEntry(id, name, frags);
+                    p += 9 + nameLen;
+                }
+                updateLeaderboard(leaderboard);
+                break;
             case MSG_IN_GREETING:
                 myClientId = (new Int32Array(evt.data.slice(1)))[0];
                 console.log("I am " + myClientId);
@@ -161,7 +215,7 @@ window.onload = function () {
             case MSG_IN_BULLET_STATE:
                 var bulletsNum = dataView.getUint32(1, true);
                 var headerOffset = 5;
-                for (i = 0; i < bulletsNum; i++) {
+                for (var i = 0; i < bulletsNum; i++) {
                     var id = dataView.getUint32(headerOffset + i*12, true);
                     var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
                     var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
@@ -200,7 +254,6 @@ window.onload = function () {
                     explosion.x = x;
                     explosion.y = y;
                     explosion.rotation = Math.random() * 360;
-                    console.log(explosion.rotation);
                     render.stage.addChild(explosion);
                     explosion.regX = 64;
                     explosion.regY = 64;
@@ -348,17 +401,39 @@ window.onload = function () {
         render.updateMapCanvasPartial(mapBitmap, sx, sy, 2*r, 2*r);
     }
 
+    var fpsLabel = new createjs.Text("60", "9px Roboto", "Red");
+    fpsLabel.textAlign = "end";
+    fpsLabel.x = 1260 - 1;
+    render.stage.addChild(fpsLabel);
+
     // Render loop.
+    var startTime = performance.now();
+    var i = 0;
+    var deltas = [];
     createjs.Ticker.on("tick", tick);
     createjs.Ticker.setFPS(60);
     function tick(evt) {
         render.redraw();
+
+        var endTime = performance.now();
+        var deltaTime = endTime - startTime;
+        startTime = endTime;
+        fpsLabel.text = (1000/average(deltas))|0;
+        deltas[i%8] = deltaTime;
+        i++;
+    }
+
+    function average(xs) {
+        var s = 0;
+        for (var i = 0; i < xs.length; ++i) {
+            s += xs[i];
+        }
+        return s/xs.length;
     }
 };
 
 function onPlayButtonClicked () {
     var login = document.getElementById("loginInput").value;
-    console.log(login);
     document.getElementById("overlay").style.display = "none";
     document.getElementById("login").style.display = "none";
     sendStart(login);

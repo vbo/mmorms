@@ -59,6 +59,7 @@ type Client struct {
     frags uint32
     ping float64
     outgoing chan []byte
+    name []byte
     observer bool
 }
 
@@ -140,7 +141,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         delayReadDeadline := func () { conn.SetReadDeadline(time.Now().Add(PONG_TIMEOUT)) }
         conn.SetPongHandler(func(payload string) error {
             delayReadDeadline();
-            if len(payload) == 16 && payload[0] == 80 {
+            if len(payload) == 16 && payload[0] == MSG_OUT_PING {
                 v := int64(binary.LittleEndian.Uint64(([]byte)(payload)[1:]))
                 pings[pingsi%PINGS_RING] = float64(time.Now().UnixNano() - v)/1000000
                 pingsi++
@@ -172,7 +173,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
         select {
         case <-pingTicker.C:
             // Send PING message, curtime payload
-            var pingPayload = [16]byte{ 80 }
+            var pingPayload = [16]byte{ MSG_OUT_PING }
             binary.LittleEndian.PutUint64(pingPayload[1:], uint64(time.Now().UnixNano()))
             conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
             err := conn.WriteMessage(websocket.PingMessage, pingPayload[:])

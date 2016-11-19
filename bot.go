@@ -98,7 +98,7 @@ func updateBot(bot *Bot) {
                 bot.direction = direction
             }
             if rand.Intn(100) % 8 == 0 {
-                bot.gunAngleTarget= int32(rand.Intn(180)) - 90
+                bot.gunAngleTarget = int32(rand.Intn(180)) - 90
             }
             msg := Message {
                 from: bot.client.id,
