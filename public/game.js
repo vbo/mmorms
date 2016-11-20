@@ -19,6 +19,7 @@ window.onload = function () {
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
     var MSG_OUT_START = 32
+    var GROUP = Math.round(Math.random()*100) % 2;
 
     var inputState = {
       moving: 0,
@@ -196,15 +197,17 @@ window.onload = function () {
                 var p = 5;
                 for (var i = 0; i < clientsNum; i++) {
                     var id = dataView.getUint32(p, true);
-                    var frags = dataView.getUint32(p + 4, true);
-                    var nameLen = dataView.getUint8(p + 8);
-                    var nameView = new DataView(evt.data, p + 9, nameLen);
+                    var sessionFrags = dataView.getUint32(p + 4, true);
+                    var lifeFrags = dataView.getUint32(p + 8, true);
+                    var nameLen = dataView.getUint8(p + 12);
+                    var nameView = new DataView(evt.data, p + 13, nameLen);
                     var name = utf8decoder.decode(nameView);
                     if (tanks[id]) {
                         tanks[id].updateName(name);
                     }
+                    var frags = GROUP == 0 ? lifeFrags : sessionFrags;
                     leaderboard[i] = new LeaderboardEntry(id, name, frags);
-                    p += 9 + nameLen;
+                    p += 13 + nameLen;
                 }
                 updateLeaderboard(leaderboard);
                 break;

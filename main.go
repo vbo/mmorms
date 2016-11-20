@@ -75,7 +75,7 @@ func NewTank() *Tank {
 
 func generateMapBitmap(mapBitmap []byte) {
     for x := 0; x < WIDTH; x++ {
-        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 120.0) + 1.2) * 100
+        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 130.0) + 1.2) * 100
         for y := 0; y < HEIGHT; y++ {
             if (float64(y) < groundCurve) {
                 mapBitmap[x + y * WIDTH] = 0
@@ -242,10 +242,9 @@ func gameLoop(net *Network) {
         case statsRequest := <- net.statsRequests:
             for _, client := range clients {
                 fmt.Fprintf(statsRequest.w,
-                            "%d\t%f\t%d\n",
+                            "%d\t%f\t\n",
                             client.id,
-                            client.ping,
-                            client.frags)
+                            client.ping)
             }
             statsRequest.done <- true
         case message := <-net.incoming:
@@ -309,7 +308,11 @@ func gameLoop(net *Network) {
                         _, ok := tanks[client.id]
                         if !ok {
                             client.name = message.data[1:]
+                            if (len(client.name) == 0) {
+                                client.name = []byte(fmt.Sprintf("Tank%d", client.id))
+                            }
                             log.Printf("%s joined", string(client.name))
+                            client.lifeFrags = 0
                             tanks[client.id] = NewTank()
                         }
 
@@ -357,7 +360,7 @@ func broadcastLeaderboard(clients map[uint32]*Client) {
             namedClientsCount++
         }
     }
-    messageLen := 5 + (9 * namedClientsCount) + namesLen
+    messageLen := 5 + (13 * namedClientsCount) + namesLen
     messageBuffer := make([]byte, messageLen)
     messageBuffer[0] = MSG_OUT_LEADERBOARD
     binary.LittleEndian.PutUint32(messageBuffer[1:], uint32(namedClientsCount))
@@ -366,10 +369,11 @@ func broadcastLeaderboard(clients map[uint32]*Client) {
         nameLen := byte(len(client.name))
         if nameLen == 0 { continue }
         binary.LittleEndian.PutUint32(message[0:], client.id)
-        binary.LittleEndian.PutUint32(message[4:], uint32(client.frags))
-        message[8] = nameLen
-        copy(message[9:], client.name)
-        message = message[9 + nameLen:]
+        binary.LittleEndian.PutUint32(message[4:], uint32(client.sessionFrags))
+        binary.LittleEndian.PutUint32(message[8:], uint32(client.lifeFrags))
+        message[12] = nameLen
+        copy(message[13:], client.name)
+        message = message[13 + nameLen:]
     }
     for _, client := range clients {
         client.outgoing <- messageBuffer[0 : messageLen]
@@ -468,7 +472,8 @@ func explodeAt(cx int32,
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
             if (owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id) {
-                owner.frags++
+                owner.lifeFrags++
+                owner.sessionFrags++
             }
             //log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
         }

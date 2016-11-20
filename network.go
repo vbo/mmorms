@@ -56,7 +56,8 @@ func (net *Network) GetNewObjectId() uint32 {
 // for each new connection and hold alive by pointer from Network.
 type Client struct {
     id uint32
-    frags uint32
+    lifeFrags uint32
+    sessionFrags uint32
     ping float64
     outgoing chan []byte
     name []byte
