@@ -471,9 +471,6 @@ func gameLoop(net *Network) {
 func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
     result := make(map[uint32]float64)
     for id, tank := range(tanks) {
-        result[id] = float64(20)
-        _ = tank
-        /*
         y := tank.y
         for {
             if isGroundF(tank.x, y, newMap) {
@@ -482,7 +479,7 @@ func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
                 result[id] = y
                 break
             }
-        } */
+        }
     }
     return result
 }

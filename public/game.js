@@ -4,6 +4,8 @@ window.onload = function () {
     var tanks = {};
     var bullets = {};
     var mapBitmap;
+    var newMapBitmap;
+    var newMapBitmapFadeInIntervalID;
     var utf8decoder = new TextDecoder("utf-8");
 
     var WIDTH = 1260;
@@ -150,6 +152,22 @@ window.onload = function () {
         }
     }
 
+    function dearchive(mapBitmapArchive) {
+       var mapBitmapBuffer = new ArrayBuffer(WIDTH * HEIGHT);
+       var mapBitmap = new Int8Array(mapBitmapBuffer)
+       var origCounter = 0, resCounter = 0;
+       while (origCounter < mapBitmapArchive.byteLength) {
+           var val = mapBitmapArchive.getUint8(origCounter);
+           var num = mapBitmapArchive.getUint32(origCounter + 1, true);
+           origCounter += 5;
+           for (var k = 0; k < num; k++) {
+               mapBitmap[resCounter] = val;
+               resCounter++;
+           }
+       }
+       return mapBitmap;
+    }
+
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://" + window.location.host + "/ws");
         conn.binaryType = "arraybuffer";
@@ -168,26 +186,13 @@ window.onload = function () {
             var messageByteView = new Uint8Array(evt.data);
             switch (dataView.getUint8(0)) {
             case MSG_IN_MAP: // map update
-                function dearchive(mapBitmapArchive) {
-                   var mapBitmapBuffer = new ArrayBuffer(WIDTH * HEIGHT);
-                   var mapBitmap = new Int8Array(mapBitmapBuffer)
-                   var origCounter = 0, resCounter = 0;
-                   while (origCounter < mapBitmapArchive.byteLength) {
-                       var val = mapBitmapArchive.getUint8(origCounter);
-                       var num = mapBitmapArchive.getUint32(origCounter + 1, true);
-                       origCounter += 5;
-                       for (var k = 0; k < num; k++) {
-                           mapBitmap[resCounter] = val;
-                           resCounter++;
-                       }
-                   }
-                   return mapBitmap;
-                }
                 if (mapSet) {
-                    var newMapBitmap = new DataView(evt.data, 1); 
+                    newMapBitmap = new DataView(evt.data, 1); 
                     newMapBitmap = dearchive(newMapBitmap);
-                    render.updateMapCanvas(newMapBitmap);
-                    mapBitmap = newMapBitmap
+                    render.updateMapCanvasBack(newMapBitmap);
+                    newMapBitmapFadeInIntervalID = setInterval(function () {
+                        render.bgImageBack.alpha += 0.2;
+                    }, 500);
                 } else {
                     mapSet = true;
                     mapBitmap = new DataView(evt.data, 1); 
@@ -202,8 +207,15 @@ window.onload = function () {
                         render.stage.removeChild(bullets[id].shape);
                     }
                     bullets = {};
+                    // Help animate space mode
                 } else {
                     spaceMode = false;
+                    mapBitmap = newMapBitmap;
+                    if (newMapBitmapFadeInIntervalID) {
+                        newMapBitmapFadeInIntervalID = clearInterval(
+                            newMapBitmapFadeInIntervalID);
+                    }
+                    render.swapBgImage();
                 }
                 break;
             case MSG_IN_STATE:
@@ -279,7 +291,7 @@ window.onload = function () {
                     radius = messageData[3];
                 // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
                 if (radius > 0) {
-                    explodeAt(x, y, radius);
+                    explodeAt(mapBitmap, x, y, radius);
                 }
                 if (tanks.hasOwnProperty(deadId)) {
                     tanks[deadId].destroy();
@@ -427,7 +439,7 @@ window.onload = function () {
           }
     }, 200);
 
-    function explodeAt(cx, cy, r) {
+    function explodeAt(mapBitmap, cx, cy, r) {
         var rs = (r*r)|0;
         var sx = Math.max(cx - r, 0)|0, sy = Math.max(cy - r, 0)|0;
         var ly = Math.min(cy + r, HEIGHT)|0, lx = Math.min(cx + r, WIDTH)|0;

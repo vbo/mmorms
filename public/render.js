@@ -5,10 +5,10 @@
         this.width = width;
         this.height = height;
         this.stage = new createjs.Stage("gameCanvas");
-        var canvas = document.getElementById('maskCanvas');
-        var canvasBack = document.getElementById('maskCanvasBack');
-        this.ctx = canvas.getContext('2d');
-        this.ctxBack = canvasBack.getContext('2d');
+        this.canvas = document.getElementById('maskCanvas');
+        this.canvasBack = document.getElementById('maskCanvasBack');
+        this.ctx = this.canvas.getContext('2d');
+        this.ctxBack = this.canvasBack.getContext('2d');
         this.maskImageData = this.ctx.createImageData(width, height);
         this.maskImageDataBack = this.ctxBack.createImageData(width, height);
         var bgSky = new createjs.Shape();
@@ -17,15 +17,30 @@
 
         // Background "theme" image.
         this.bgImage = new createjs.Bitmap("/theme.jpg");
+        this.bgImageFilter = new createjs.AlphaMaskFilter(this.canvas);
+        this.bgImage.filters = [this.bgImageFilter]
         this.bgImageBack = new createjs.Bitmap("/theme.jpg");
-        this.bgImage.filters = [
-            new createjs.AlphaMaskFilter(canvas)
-        ];
-        this.bgImageBack.filters = [
-            new createjs.AlphaMaskFilter(canvasBack)
-        ];
+        this.bgImageBackFilter = new createjs.AlphaMaskFilter(this.canvasBack);
+        this.bgImageBack.filters = [this.bgImageBackFilter]
+        this.bgImageBack.alpha = 0;
         this.stage.addChild(this.bgImage);
         this.stage.addChild(this.bgImageBack);
+    }
+
+    render.swap = function(a, b) {
+        var tmp = render[a];
+        render[a] = render[b];
+        render[b] = tmp;
+    }
+
+    render.swapBgImage = function () {
+        render.swap("ctx", "ctxBack");
+        render.swap("maskImageData", "maskImageDataBack");
+        render.swap("canvas", "canvasBack");
+        this.bgImageBack.alpha = 0;
+        this.bgImage.alpha = 1;
+        this.bgImageFilter.mask = this.canvas;
+        this.bgImageBackFilter.mask = this.canvasBack;
     }
 
     // Draw the map bitmap to a canvas to use
