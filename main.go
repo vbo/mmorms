@@ -42,6 +42,10 @@ const TANK_GUN_LENGTH = 30
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
 
+const DESTROYED_FRACTION_TO_SPACE = 0.01
+
+const SPACE_DURATION = 1000 * time.Millisecond
+
 const WIDTH = 1260
 const HEIGHT = 620
 
@@ -86,7 +90,39 @@ func generateMapBitmap(mapBitmap []byte) {
     }
 }
 
-func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte, dtTotalSeconds float64, clients map[uint32]*Client) {
+func simulateWorldInSpace(tanks map[uint32]*Tank,
+                          oldMap []byte, newMap []byte,
+                          dtTotalSeconds float64,
+                          frameStartTime time.Time,
+                          spaceStartTime time.Time) int {
+    targetTime := spaceStartTime.Add(SPACE_DURATION)
+    dt := targetTime.Sub(frameStartTime)
+    numFinished :=  0
+    for _, tank := range tanks {
+        ds := 20 - tank.y
+        if dt <= 0 {
+            tank.y = 20
+            numFinished++
+        } else {
+            v := ds / dt.Seconds()
+            if math.Abs(ds) > 1 {
+                tank.y += dtTotalSeconds * v
+            } else {
+                numFinished++
+            }
+        }
+    }
+    return numFinished
+}
+
+func simulateWorld(
+    tanks map[uint32]*Tank,
+    bulletsIn *[]Bullet,
+    mapBitmap []byte,
+    dtTotalSeconds float64,
+    clients map[uint32]*Client,
+    numGroundDestroyed *int) {
+
     bullets := *bulletsIn
     for dtTotalSeconds > 0.0 {
         dt := math.Min(0.005, dtTotalSeconds)
@@ -141,7 +177,8 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     BULLET_EXPLOSION_RAD,
                     mapBitmap,
                     tanks,
-                    clients[bullet.ownerId])
+                    clients[bullet.ownerId],
+                    numGroundDestroyed)
                 //log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
                 bullets[bulletIndex] = bullets[len(bullets) - 1]
                 bullets = bullets[:len(bullets) - 1]
@@ -159,7 +196,8 @@ func simulateWorld(tanks map[uint32]*Tank, bulletsIn *[]Bullet, mapBitmap []byte
                     TANK_RAD,
                     mapBitmap,
                     tanks,
-                    clients[tankID])
+                    clients[tankID],
+                    numGroundDestroyed)
                 delete(tanks, tankID)
             }
         }
@@ -175,6 +213,11 @@ func gameLoop(net *Network) {
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
+    numGroundDestroyed := 0
+    newMapChannel := make(chan []byte)
+    var newMapBitmap []byte
+    var spaceStartTime time.Time
+    spaceMode := false
 
     // TODO(vbo): load from predesigned file?
     generateMapBitmap(mapBitmap)
@@ -218,11 +261,12 @@ func gameLoop(net *Network) {
             binary.LittleEndian.PutUint32(greetingMsg[1:], client.id)
             //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
-            client.outgoing <- mapBitmapBufferCopy[0:]
+            client.outgoing <- mapBitmapBufferCopy
             //log.Println("Map & greetings sent")
             if !client.observer {
                 tanks[client.id] = NewTank()
             }
+
         case client := <-net.disconnect:
             tank, ok := tanks[client.id]
             if ok {
@@ -233,13 +277,15 @@ func gameLoop(net *Network) {
                     TANK_RAD,
                     mapBitmap,
                     tanks,
-                    client)
+                    client,
+                    &numGroundDestroyed)
                 delete(tanks, client.id)
             }
             delete(clients, client.id)
             close(client.outgoing)
             log.Printf("Client %d disconnected.", client.id)
-        case statsRequest := <- net.statsRequests:
+
+        case statsRequest := <-net.statsRequests:
             for _, client := range clients {
                 fmt.Fprintf(statsRequest.w,
                             "%d\t%f\t\n",
@@ -247,6 +293,25 @@ func gameLoop(net *Network) {
                             client.ping)
             }
             statsRequest.done <- true
+
+        case newMapBitmap = <-newMapChannel:
+            /**
+             * Full process:
+             * - Remove current ground everywhere.
+             * - Send empty map message to client.
+             * - Disable graviation.
+             * - Generate new map.
+             * - Calculate new coordinates.
+             * - Move tanks to the new coordinates.
+             * - When all are done - send the new map.
+             * - Update bitmap.
+             */
+            // TODO: notify client about new map generation
+            spaceMode = true
+            spaceStartTime = startTime
+            bullets = bullets[0:0]
+
+
         case message := <-net.incoming:
             msgNum := len(net.incoming)
             /*
@@ -277,7 +342,7 @@ func gameLoop(net *Network) {
 
                     case MSG_IN_SHOOTING: // shooting
                         _, ok := tanks[client.id]
-                        if ok {
+                        if ok && !spaceMode {
                             aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                             aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
                             power := float64(message.data[9])
@@ -330,12 +395,38 @@ func gameLoop(net *Network) {
 
         // world simulation 
         dtTotalSeconds := dtTotal.Seconds()
-        simulateWorld(tanks, &bullets, mapBitmap, dtTotalSeconds, /* TODO(vbo): remove */ clients)
+        if !spaceMode {
+            simulateWorld(tanks,
+                &bullets,
+                mapBitmap,
+                dtTotalSeconds,
+                /* TODO(vbo): remove */ clients,
+                &numGroundDestroyed)
+        } else {
+            finished := simulateWorldInSpace(
+                tanks,
+                mapBitmap,
+                newMapBitmap,
+                dtTotalSeconds,
+                startTime,
+                spaceStartTime)
+            if finished == len(tanks) {
+                spaceMode = false
+                mapBitmap = newMapBitmap
+                //TODO: notify client
+            }
+        }
 
         // Broadcast world snapshot
         broadcastTanks(tanks, clients)
         broadcastBullets(bullets, clients)
         broadcastLeaderboard(clients)
+
+        if numGroundDestroyed > WIDTH * HEIGHT * DESTROYED_FRACTION_TO_SPACE {
+            log.Println("Time to restart...")
+            numGroundDestroyed = 0
+            go generateMapBitmapAsync(newMapChannel)
+        }
 
         // Bookkeeping
         newTime := time.Now()
@@ -348,6 +439,13 @@ func gameLoop(net *Network) {
         // TODO: improve sleep precision
         time.Sleep(TARGET_TICK_TIME - dtTotal)
     }
+}
+
+func generateMapBitmapAsync(result chan []byte) {
+    mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
+    mapBitmapBuffer[0] = MSG_OUT_MAP
+    generateMapBitmap(mapBitmapBuffer[1:])
+    result <- mapBitmapBuffer
 }
 
 func broadcastLeaderboard(clients map[uint32]*Client) {
@@ -445,7 +543,8 @@ func explodeAt(cx int32,
                r int32,
                mapBitmap []byte,
                tanks map[uint32]*Tank,
-               owner *Client) {
+               owner *Client,
+               numGroundDestroyed *int) {
     // Destroy terrain
     // Use signed int math to make it possible to write equivalent js.
     // TODO: dragons here
@@ -458,7 +557,11 @@ func explodeAt(cx int32,
         for x := sx; x < lx; x++ {
             ds := (y-cy)*(y-cy) + (x-cx)*(x-cx)
             if ds < rs {
-                mapBitmap[uint32(x) + uint32(y) * WIDTH] = 0
+                index := uint32(x) + uint32(y) * WIDTH;
+                if isGroundI(x, y, mapBitmap) {
+                    *numGroundDestroyed++
+                }
+                mapBitmap[index] = 0
             }
         }
     }
