@@ -21,6 +21,8 @@ window.onload = function () {
     var MSG_OUT_START = 32
     var GROUP = Math.round(Math.random()*100) % 2;
 
+    var mapSet = false;
+
     var inputState = {
       moving: 0,
       power: 0,
@@ -164,9 +166,23 @@ window.onload = function () {
             var messageByteView = new Uint8Array(evt.data);
             switch (dataView.getUint8(0)) {
             case MSG_IN_MAP: // map update
+                if (mapSet) {
+                    console.log("Ded");
+                    for (var id in bullets) {
+                        render.stage.removeChild(bullets[id].shape);
+                    }
+                    bullets = {};
+                    var newMapBitmap = new Int8Array(evt.data, 1);
+                    setTimeout(function() {
+                        render.updateMapCanvas(newMapBitmap);
+                        mapBitmap = newMapBitmap;
+                    }, 1000);
+            } else {
+                mapSet = true;
                 mapBitmap = new Int8Array(evt.data, 1); 
                 render.updateMapCanvas(mapBitmap);
-                break;
+            }
+            break;
             case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
                 var messageView = new Int32Array(evt.data.slice(2));

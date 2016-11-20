@@ -42,7 +42,7 @@ const TANK_GUN_LENGTH = 30
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
 
-const DESTROYED_FRACTION_TO_SPACE = 0.01
+const DESTROYED_FRACTION_TO_SPACE = 0.25
 
 const SPACE_DURATION = 1000 * time.Millisecond
 
@@ -310,6 +310,9 @@ func gameLoop(net *Network) {
             spaceMode = true
             spaceStartTime = startTime
             bullets = bullets[0:0]
+            for _,client := range(clients) {
+                client.outgoing <- newMapBitmap
+            }
 
 
         case message := <-net.incoming:
@@ -413,6 +416,7 @@ func gameLoop(net *Network) {
             if finished == len(tanks) {
                 spaceMode = false
                 mapBitmap = newMapBitmap
+                log.Println("Trasfer finished")
                 //TODO: notify client
             }
         }
