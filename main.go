@@ -42,9 +42,9 @@ const TANK_GUN_LENGTH = 30
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
 
-const DESTROYED_FRACTION_TO_SPACE = 0.25
+const DESTROYED_FRACTION_TO_SPACE = 0.05
 
-const SPACE_DURATION = 1000 * time.Millisecond
+const SPACE_DURATION = 5000 * time.Millisecond
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -218,10 +218,11 @@ func gameLoop(net *Network) {
     // map transfer variables
     numGroundDestroyed := 0
     newMapChannel := make(chan []byte)
+    newMapBroadcastDoneChan := make(chan bool)
     var newMapBitmap []byte
     var spaceStartTime time.Time
     spaceMode := false
-    newTanksPos := make(map[uint32]float64)
+    var newTanksPos map[uint32]float64
 
     // TODO(vbo): load from predesigned file?
     generateMapBitmap(mapBitmap)
@@ -234,7 +235,7 @@ func gameLoop(net *Network) {
     var memStats, prevMemStats runtime.MemStats
 
     for {
-        if curTick % 1000 == 0 {
+        if curTick % 100 == 0 {
             runtime.ReadMemStats(&memStats)
             var numGCDiff = memStats.NumGC - prevMemStats.NumGC
             var numMallocs =  memStats.Mallocs - prevMemStats.Mallocs
@@ -254,7 +255,9 @@ func gameLoop(net *Network) {
         // Make a GC-ed copy of the mapBitmap to respond to connects
         // TODO: can we allocate the space just once and reuse it?
         mapBitmapBufferCopy := make([]byte, len(mapBitmapBuffer))
-        copy(mapBitmapBufferCopy, mapBitmapBuffer)
+        mapBitmapBufferCopy[0] = mapBitmapBuffer[0]
+        mapArchiveSize := archiveMap(mapBitmapBuffer[1:], mapBitmapBufferCopy[1:])
+        mapBitmapBufferCopy = mapBitmapBufferCopy[0:mapArchiveSize + 1]
 
         // Handle incoming messages
         select {
@@ -299,25 +302,24 @@ func gameLoop(net *Network) {
             statsRequest.done <- true
 
         case newMapBitmap = <-newMapChannel:
-            /**
-             * Full process:
-             * - Remove current ground everywhere.
-             * - Send empty map message to client.
-             * - Disable graviation.
-             * - Generate new map.
-             * - Calculate new coordinates.
-             * - Move tanks to the new coordinates.
-             * - When all are done - send the new map.
-             * - Update bitmap.
-             */
-            // TODO: notify client about new map generation
+            newMapBitmapArchive := make([]byte, len(newMapBitmap))
+            newMapBitmapArchive[0] = newMapBitmap[0]
+            mapArchiveSize := archiveMap(newMapBitmap[1:], newMapBitmapArchive[1:])
+            newMapBitmapArchive = newMapBitmapArchive[0:mapArchiveSize + 1]
+            go func() {
+                for _,client := range(clients) {
+                    client.outgoing <- newMapBitmapArchive
+                    log.Printf("Map sent to %d", client.id)
+                    time.Sleep(100 * time.Millisecond)
+                }
+                newMapBroadcastDoneChan <-true
+            }()
+
+        case _ = <-newMapBroadcastDoneChan:
+            log.Println("Entering the space mode...")
             spaceMode = true
             spaceStartTime = startTime
             bullets = bullets[0:0]
-            for _,client := range(clients) {
-                client.outgoing <- newMapBitmap
-            }
-
 
         case message := <-net.incoming:
             msgNum := len(net.incoming)
@@ -410,7 +412,9 @@ func gameLoop(net *Network) {
                 /* TODO(vbo): remove */ clients,
                 &numGroundDestroyed)
         } else {
-            newTanksPos = getNewTanksPos(tanks, newMapBitmap)
+            if (newTanksPos == nil) {
+                newTanksPos = getNewTanksPos(tanks, newMapBitmap)
+            }
             finished := simulateWorldInSpace(
                 tanks,
                 newTanksPos,
@@ -418,6 +422,7 @@ func gameLoop(net *Network) {
                 startTime,
                 spaceStartTime)
             if finished == len(tanks) {
+                newTanksPos = nil
                 spaceMode = false
                 mapBitmap = newMapBitmap
                 log.Println("Trasfer finished")
@@ -452,6 +457,9 @@ func gameLoop(net *Network) {
 func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
     result := make(map[uint32]float64)
     for id, tank := range(tanks) {
+        result[id] = float64(20)
+        _ = tank
+        /*
         y := tank.y
         for {
             if isGroundF(tank.x, y, newMap) {
@@ -460,9 +468,30 @@ func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
                 result[id] = y
                 break
             }
-        }
+        } */
     }
     return result
+}
+
+func archiveMap(mapBitmap []byte, result []byte) int {
+    counter := uint32(1)
+    value := mapBitmap[0]
+    k := 0
+    for i := 1; i < len(mapBitmap); i++ {
+        if mapBitmap[i] != value {
+            result[k] = value
+            binary.LittleEndian.PutUint32(result[k+1:], counter)
+            k += 5
+            counter = 1
+            value = mapBitmap[i]
+        } else {
+            counter++
+        }
+    }
+    result[k] = value
+    binary.LittleEndian.PutUint32(result[k+1:], counter)
+    k += 5
+    return k
 }
 
 func generateMapBitmapAsync(result chan []byte) {

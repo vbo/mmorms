@@ -188,6 +188,9 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
                 return
             }
             conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
+            if (len(message) > 500) {
+                log.Printf("Sending big message of size %d", len(message))
+            }
             err := conn.WriteMessage(websocket.BinaryMessage, message)
             if err != nil {
                 log.Printf("Stopping W(%d): %s", client.id, err)

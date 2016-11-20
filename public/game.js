@@ -166,22 +166,36 @@ window.onload = function () {
             var messageByteView = new Uint8Array(evt.data);
             switch (dataView.getUint8(0)) {
             case MSG_IN_MAP: // map update
+                function dearchive(mapBitmapArchive) {
+                   var mapBitmapBuffer = new ArrayBuffer(WIDTH * HEIGHT);
+                   var mapBitmap = new Int8Array(mapBitmapBuffer)
+                   var origCounter = 0, resCounter = 0;
+                   while (origCounter < mapBitmapArchive.byteLength) {
+                       var val = mapBitmapArchive.getUint8(origCounter);
+                       var num = mapBitmapArchive.getUint32(origCounter + 1, true);
+                       origCounter += 5;
+                       for (var k = 0; k < num; k++) {
+                           mapBitmap[resCounter] = val;
+                           resCounter++;
+                       }
+                   }
+                   return mapBitmap;
+                }
                 if (mapSet) {
-                    console.log("Ded");
                     for (var id in bullets) {
                         render.stage.removeChild(bullets[id].shape);
                     }
                     bullets = {};
-                    var newMapBitmap = new Int8Array(evt.data, 1);
-                    setTimeout(function() {
-                        render.updateMapCanvas(newMapBitmap);
-                        mapBitmap = newMapBitmap;
-                    }, 1000);
-            } else {
-                mapSet = true;
-                mapBitmap = new Int8Array(evt.data, 1); 
-                render.updateMapCanvas(mapBitmap);
-            }
+                    var newMapBitmap = new DataView(evt.data, 1); 
+                    newMapBitmap = dearchive(newMapBitmap);
+                    render.updateMapCanvas(newMapBitmap);
+                    mapBitmap = newMapBitmap
+                } else {
+                    mapSet = true;
+                    mapBitmap = new DataView(evt.data, 1); 
+                    mapBitmap = dearchive(mapBitmap);
+                    render.updateMapCanvas(mapBitmap);
+                }
             break;
             case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
