@@ -15,6 +15,7 @@ window.onload = function () {
     var MSG_IN_BULLET_STATE = 3
     var MSG_IN_DEATH = 4
     var MSG_IN_LEADERBOARD = 5
+    var MSG_IN_MAP_CHANGE = 6
 
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
@@ -22,6 +23,7 @@ window.onload = function () {
     var GROUP = Math.round(Math.random()*100) % 2;
 
     var mapSet = false;
+    var spaceMode = false;
 
     var inputState = {
       moving: 0,
@@ -182,10 +184,6 @@ window.onload = function () {
                    return mapBitmap;
                 }
                 if (mapSet) {
-                    for (var id in bullets) {
-                        render.stage.removeChild(bullets[id].shape);
-                    }
-                    bullets = {};
                     var newMapBitmap = new DataView(evt.data, 1); 
                     newMapBitmap = dearchive(newMapBitmap);
                     render.updateMapCanvas(newMapBitmap);
@@ -197,6 +195,17 @@ window.onload = function () {
                     render.updateMapCanvas(mapBitmap);
                 }
             break;
+            case MSG_IN_MAP_CHANGE:
+                if (messageByteView[1] == 1) {
+                    spaceMode = true;
+                    for (var id in bullets) {
+                        render.stage.removeChild(bullets[id].shape);
+                    }
+                    bullets = {};
+                } else {
+                    spaceMode = false;
+                }
+                break;
             case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
                 var messageView = new Int32Array(evt.data.slice(2));
@@ -246,17 +255,19 @@ window.onload = function () {
                 console.log("I am " + myClientId);
                 break;
             case MSG_IN_BULLET_STATE:
-                var bulletsNum = dataView.getUint32(1, true);
-                var headerOffset = 5;
-                for (var i = 0; i < bulletsNum; i++) {
-                    var id = dataView.getUint32(headerOffset + i*12, true);
-                    var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
-                    var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
-                    if (!bullets[id]) {
-                        bullets[id] =
-                            new Bullet(bulletX, bulletY, id);
-                    } else {
-                        bullets[id].updateState(bulletX, bulletY);
+                if (!spaceMode) {
+                    var bulletsNum = dataView.getUint32(1, true);
+                    var headerOffset = 5;
+                    for (var i = 0; i < bulletsNum; i++) {
+                        var id = dataView.getUint32(headerOffset + i*12, true);
+                        var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
+                        var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
+                        if (!bullets[id]) {
+                            bullets[id] =
+                                new Bullet(bulletX, bulletY, id);
+                        } else {
+                            bullets[id].updateState(bulletX, bulletY);
+                        }
                     }
                 }
                 break;
@@ -383,7 +394,6 @@ window.onload = function () {
         }
         if (e.code == "Space") {
             inputState.power = getShootingPower(inputState);
-            console.log("Shooting with power " + inputState.power);
             var a = me().gun.rotation * Math.PI / 180;
             var aimX = Math.cos(a) * 1000,
                 aimY = Math.sin(a) * 1000;
@@ -393,7 +403,6 @@ window.onload = function () {
             dataView.setInt32(1, aimX, true /* little endian */);
             dataView.setInt32(5, aimY, true /* little endian */);
             dataView.setUint8(9, inputState.power);
-            console.log(aimX, aimY);
             conn.send(messageBuffer);
             inputState.power = 0;
             me().gun.filters = [];

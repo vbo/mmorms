@@ -56,6 +56,7 @@ const (
     MSG_OUT_BULLET_STATE = 3
     MSG_OUT_DEATH = 4
     MSG_OUT_LEADERBOARD = 5
+    MSG_OUT_MAP_CHANGE = 6
     MSG_OUT_PING = 80
 )
 
@@ -235,7 +236,7 @@ func gameLoop(net *Network) {
     var memStats, prevMemStats runtime.MemStats
 
     for {
-        if curTick % 100 == 0 {
+        if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
             var numGCDiff = memStats.NumGC - prevMemStats.NumGC
             var numMallocs =  memStats.Mallocs - prevMemStats.Mallocs
@@ -307,7 +308,8 @@ func gameLoop(net *Network) {
             mapArchiveSize := archiveMap(newMapBitmap[1:], newMapBitmapArchive[1:])
             newMapBitmapArchive = newMapBitmapArchive[0:mapArchiveSize + 1]
             go func() {
-                for _,client := range(clients) {
+                // TODO: this map might change while we iterate over it
+                for _,client := range clients {
                     client.outgoing <- newMapBitmapArchive
                     log.Printf("Map sent to %d", client.id)
                     time.Sleep(100 * time.Millisecond)
@@ -317,6 +319,12 @@ func gameLoop(net *Network) {
 
         case _ = <-newMapBroadcastDoneChan:
             log.Println("Entering the space mode...")
+            mapChangeMsg := make([]byte, 2)
+            mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
+            mapChangeMsg[1] = 1
+            for _,client := range clients {
+                client.outgoing <- mapChangeMsg
+            }
             spaceMode = true
             spaceStartTime = startTime
             bullets = bullets[0:0]
@@ -424,6 +432,12 @@ func gameLoop(net *Network) {
             if finished == len(tanks) {
                 newTanksPos = nil
                 spaceMode = false
+                mapChangeMsg := make([]byte, 2)
+                mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
+                mapChangeMsg[1] = 0
+                for _,client := range(clients) {
+                    client.outgoing <- mapChangeMsg
+                }
                 mapBitmap = newMapBitmap
                 log.Println("Trasfer finished")
                 //TODO: notify client
