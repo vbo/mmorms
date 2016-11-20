@@ -136,18 +136,23 @@ window.onload = function () {
 
     var leaderboardLines = [];
     for (var i = 0; i < MAX_LEADERS; i++) {
-        var line = new createjs.Text("hello", "9px Roboto", "Red");
-        line.y = i * 12;
+        var line = new createjs.Text("", "12px Roboto", "Black");
+        line.y = 5 + i * 14;
+        line.x = 10;
         render.stage.addChild(line);
         leaderboardLines[i] = line;
     }
     function updateLeaderboard(entries) {
         entries.sort(LeaderboardEntry.compare);
+        var numLeaders = 0;
         for (var i = 0; i < Math.min(entries.length, MAX_LEADERS); i++) {
             var leader = entries[i];
-            leaderboardLines[i].text = leader.name + "\t" + leader.frags;
+            if (leader.frags != 0) {
+                numLeaders++;
+                leaderboardLines[i].text = (i + 1) + ". " + leader.name + "\t" + leader.frags;
+            }
         }
-        for (;i < MAX_LEADERS; i++) {
+        for (var i = numLeaders; i < entries.length; i++) {
             leaderboardLines[i].text = "";
         }
     }

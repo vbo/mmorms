@@ -44,7 +44,7 @@ const TANK_HEIGHT = 20
 
 const DESTROYED_FRACTION_TO_SPACE = 0.05
 
-const SPACE_DURATION = 5000 * time.Millisecond
+const SPACE_DURATION = 1000 * time.Millisecond
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -219,7 +219,7 @@ func gameLoop(net *Network) {
     // map transfer variables
     numGroundDestroyed := 0
     newMapChannel := make(chan []byte)
-    newMapBroadcastDoneChan := make(chan bool)
+    newMapBroadcastDoneChan := make(chan bool, 2)
     var newMapBitmap []byte
     var spaceStartTime time.Time
     spaceMode := false
@@ -307,15 +307,10 @@ func gameLoop(net *Network) {
             newMapBitmapArchive[0] = newMapBitmap[0]
             mapArchiveSize := archiveMap(newMapBitmap[1:], newMapBitmapArchive[1:])
             newMapBitmapArchive = newMapBitmapArchive[0:mapArchiveSize + 1]
-            go func() {
-                // TODO: this map might change while we iterate over it
-                for _,client := range clients {
-                    client.outgoing <- newMapBitmapArchive
-                    log.Printf("Map sent to %d", client.id)
-                    time.Sleep(100 * time.Millisecond)
-                }
-                newMapBroadcastDoneChan <-true
-            }()
+            for _,client := range clients {
+                client.outgoing <- newMapBitmapArchive
+            }
+            newMapBroadcastDoneChan <-true
 
         case _ = <-newMapBroadcastDoneChan:
             log.Println("Entering the space mode...")
