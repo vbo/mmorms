@@ -90,18 +90,19 @@ func generateMapBitmap(mapBitmap []byte) {
     }
 }
 
+
 func simulateWorldInSpace(tanks map[uint32]*Tank,
-                          oldMap []byte, newMap []byte,
+                          newTanksPos map[uint32]float64,
                           dtTotalSeconds float64,
                           frameStartTime time.Time,
                           spaceStartTime time.Time) int {
     targetTime := spaceStartTime.Add(SPACE_DURATION)
     dt := targetTime.Sub(frameStartTime)
     numFinished :=  0
-    for _, tank := range tanks {
-        ds := 20 - tank.y
+    for id, tank := range tanks {
+        ds := newTanksPos[id] - tank.y
         if dt <= 0 {
-            tank.y = 20
+            tank.y = newTanksPos[id]
             numFinished++
         } else {
             v := ds / dt.Seconds()
@@ -213,11 +214,14 @@ func gameLoop(net *Network) {
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
+
+    // map transfer variables
     numGroundDestroyed := 0
     newMapChannel := make(chan []byte)
     var newMapBitmap []byte
     var spaceStartTime time.Time
     spaceMode := false
+    newTanksPos := make(map[uint32]float64)
 
     // TODO(vbo): load from predesigned file?
     generateMapBitmap(mapBitmap)
@@ -406,10 +410,10 @@ func gameLoop(net *Network) {
                 /* TODO(vbo): remove */ clients,
                 &numGroundDestroyed)
         } else {
+            newTanksPos = getNewTanksPos(tanks, newMapBitmap)
             finished := simulateWorldInSpace(
                 tanks,
-                mapBitmap,
-                newMapBitmap,
+                newTanksPos,
                 dtTotalSeconds,
                 startTime,
                 spaceStartTime)
@@ -443,6 +447,22 @@ func gameLoop(net *Network) {
         // TODO: improve sleep precision
         time.Sleep(TARGET_TICK_TIME - dtTotal)
     }
+}
+
+func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
+    result := make(map[uint32]float64)
+    for id, tank := range(tanks) {
+        y := tank.y
+        for {
+            if isGroundF(tank.x, y, newMap) {
+                y -= 1
+            } else {
+                result[id] = y
+                break
+            }
+        }
+    }
+    return result
 }
 
 func generateMapBitmapAsync(result chan []byte) {
