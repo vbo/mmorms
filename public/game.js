@@ -155,7 +155,7 @@ window.onload = function () {
                 leaderboardLines[i].text = (i + 1) + ". " + leader.name + "\t" + leader.frags;
             }
         }
-        for (var i = numLeaders; i < entries.length; i++) {
+        for (var i = numLeaders; i < MAX_LEADERS; i++) {
             leaderboardLines[i].text = "";
         }
     }

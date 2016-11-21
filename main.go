@@ -67,13 +67,13 @@ const (
     MSG_IN_START = 32
 )
 
-const NUM_BOTS = 5
+const NUM_BOTS = 0
 
-const TARGET_TICK_TIME = 20 * time.Millisecond
+const TARGET_TICK_TIME = 200 * time.Millisecond
 
 func NewTank() *Tank {
     return &Tank{
-        x: float64(rand.Intn(WIDTH)),
+        x: float64(1 + rand.Intn(WIDTH - 1)),
         y: 20,
         hp: 100,
     }
@@ -311,6 +311,8 @@ func gameLoop(net *Network) {
             for _,client := range clients {
                 client.outgoing <- newMapBitmapArchive
             }
+            // TODO(vbo): what if client connects during NEWMAP_TIMEOUT sleep?
+            // Should we send him newMap as well?
             go func() {
                 time.Sleep(NEWMAP_TIMEOUT)
                 startOfSpaceMode <-true
@@ -321,6 +323,7 @@ func gameLoop(net *Network) {
             mapChangeMsg := make([]byte, 2)
             mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
             mapChangeMsg[1] = 1
+            // TODO(vbo): what if client connects during space mode?
             for _,client := range clients {
                 client.outgoing <- mapChangeMsg
             }
@@ -420,7 +423,9 @@ func gameLoop(net *Network) {
                 &numGroundDestroyed)
         } else {
             if (newTanksPos == nil) {
-                newTanksPos = getNewTanksPos(tanks, newMapBitmap)
+                log.Println("New tank pos calc start")
+                newTanksPos = getNewTanksPos(tanks, newMapBitmap[1:])
+                log.Println("New tank pos calc done")
             }
             finished := simulateWorldInSpace(
                 tanks,
