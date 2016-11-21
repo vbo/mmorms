@@ -237,8 +237,6 @@ func gameLoop(net *Network) {
     var memStats, prevMemStats runtime.MemStats
 
     for {
-        // Not clear why we must have it here, but we must..
-        mapBitmap := mapBitmapBuffer[1:]
         if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
             var numGCDiff = memStats.NumGC - prevMemStats.NumGC
@@ -433,7 +431,7 @@ func gameLoop(net *Network) {
             if finished == len(tanks) {
                 newTanksPos = nil
                 spaceMode = false
-                copy(mapBitmapBuffer[1:], newMapBitmap)
+                copy(mapBitmapBuffer[1:], newMapBitmap[1:])
                 newMapBitmap = nil
                 numGroundDestroyed = 0
                 log.Println("Trasfer finished")
