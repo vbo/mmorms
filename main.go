@@ -44,6 +44,7 @@ const TANK_HEIGHT = 20
 
 const DESTROYED_FRACTION_TO_SPACE = 0.05
 
+const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
 
 const WIDTH = 1260
@@ -219,7 +220,7 @@ func gameLoop(net *Network) {
     // map transfer variables
     numGroundDestroyed := 0
     newMapChannel := make(chan []byte)
-    newMapBroadcastDoneChan := make(chan bool, 2)
+    startOfSpaceMode := make(chan bool, 2)
     var newMapBitmap []byte
     var spaceStartTime time.Time
     spaceMode := false
@@ -236,6 +237,8 @@ func gameLoop(net *Network) {
     var memStats, prevMemStats runtime.MemStats
 
     for {
+        // Not clear why we must have it here, but we must..
+        mapBitmap := mapBitmapBuffer[1:]
         if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
             var numGCDiff = memStats.NumGC - prevMemStats.NumGC
@@ -310,9 +313,12 @@ func gameLoop(net *Network) {
             for _,client := range clients {
                 client.outgoing <- newMapBitmapArchive
             }
-            newMapBroadcastDoneChan <-true
+            go func() {
+                time.Sleep(NEWMAP_TIMEOUT)
+                startOfSpaceMode <-true
+            }()
 
-        case _ = <-newMapBroadcastDoneChan:
+        case _ = <-startOfSpaceMode:
             log.Println("Entering the space mode...")
             mapChangeMsg := make([]byte, 2)
             mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
@@ -427,15 +433,17 @@ func gameLoop(net *Network) {
             if finished == len(tanks) {
                 newTanksPos = nil
                 spaceMode = false
+                copy(mapBitmapBuffer[1:], newMapBitmap)
+                newMapBitmap = nil
+                numGroundDestroyed = 0
+                log.Println("Trasfer finished")
+
                 mapChangeMsg := make([]byte, 2)
                 mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
                 mapChangeMsg[1] = 0
                 for _,client := range(clients) {
                     client.outgoing <- mapChangeMsg
                 }
-                mapBitmap = newMapBitmap
-                log.Println("Trasfer finished")
-                //TODO: notify client
             }
         }
 
@@ -444,7 +452,7 @@ func gameLoop(net *Network) {
         broadcastBullets(bullets, clients)
         broadcastLeaderboard(clients)
 
-        if numGroundDestroyed > WIDTH * HEIGHT * DESTROYED_FRACTION_TO_SPACE {
+        if newMapBitmap == nil && numGroundDestroyed > WIDTH * HEIGHT * DESTROYED_FRACTION_TO_SPACE {
             log.Println("Time to restart...")
             numGroundDestroyed = 0
             go generateMapBitmapAsync(newMapChannel)
@@ -467,12 +475,25 @@ func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
     result := make(map[uint32]float64)
     for id, tank := range(tanks) {
         y := tank.y
-        for {
-            if isGroundF(tank.x, y, newMap) {
-                y -= 1
-            } else {
-                result[id] = y
-                break
+        if (isGroundF(tank.x, y, newMap)) {
+            // Gettin up from the ground
+            for {
+                if isGroundF(tank.x, y, newMap) {
+                    y -= 1
+                } else {
+                    result[id] = y
+                    break
+                }
+            }
+        } else {
+            // Falling down
+            for {
+                if !isGroundF(tank.x, y + 1, newMap) {
+                    y += 1
+                } else {
+                    result[id] = y
+                    break
+                }
             }
         }
     }

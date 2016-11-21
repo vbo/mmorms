@@ -11,6 +11,8 @@ window.onload = function () {
     var WIDTH = 1260;
     var HEIGHT = 620;
 
+    var NEWMAP_TIMEOUT = 30000;
+
     var MSG_IN_MAP = 0
     var MSG_IN_STATE = 1
     var MSG_IN_GREETING = 2
@@ -188,23 +190,27 @@ window.onload = function () {
         conn.onmessage = function (evt) {
             var dataView = new DataView(evt.data);
             // TODO: Replace with DataView
-            var messageByteView = new Uint8Array(evt.data);
             switch (dataView.getUint8(0)) {
             case MSG_IN_MAP: // map update
                 if (mapSet) {
                     newMapBitmap = new DataView(evt.data, 1); 
                     newMapBitmap = dearchive(newMapBitmap);
                     render.updateMapCanvasBack(newMapBitmap);
+                    var newMapTimeStart = performance.now();
                     newMapBitmapFadeInIntervalID = setInterval(function () {
-                        render.bgImageBack.alpha += 0.2;
-                    }, 500);
+                        var elapsed = performance.now() - newMapTimeStart;
+                        var percentDone = elapsed/(NEWMAP_TIMEOUT * 1.7);
+                        render.bgImageBack.alpha = percentDone;
+                    }, 50);
                 } else {
                     mapSet = true;
                     mapBitmap = new DataView(evt.data, 1); 
+                    console.log("1", mapBitmap);
                     mapBitmap = dearchive(mapBitmap);
+                    console.log("2", mapBitmap);
                     render.updateMapCanvas(mapBitmap);
                 }
-            break;
+                break;
             case MSG_IN_MAP_CHANGE:
                 if (messageByteView[1] == 1) {
                     spaceMode = true;
@@ -212,7 +218,13 @@ window.onload = function () {
                         render.stage.removeChild(bullets[id].shape);
                     }
                     bullets = {};
-                    // Help animate space mode
+                    function slideDownOldMap() {
+                        if (spaceMode) {
+                            render.bgImage.alpha -= 0.1;
+                            setTimeout(slideDownOldMap, 100);
+                        }
+                    }
+                    setTimeout(slideDownOldMap, 1);
                 } else {
                     spaceMode = false;
                     mapBitmap = newMapBitmap;
@@ -295,8 +307,13 @@ window.onload = function () {
                     y = messageData[2],
                     radius = messageData[3];
                 // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
-                if (radius > 0) {
-                    explodeAt(mapBitmap, x, y, radius);
+                if (radius > 0 && !spaceMode) {
+                    if (!mapBitmap) {
+                        // TODO: discover why?!
+                        console.log("BUG!")
+                    } else {
+                        explodeAt(mapBitmap, x, y, radius);
+                    }
                 }
                 if (tanks.hasOwnProperty(deadId)) {
                     tanks[deadId].destroy();

@@ -41,6 +41,8 @@
         this.bgImage.alpha = 1;
         this.bgImageFilter.mask = this.canvas;
         this.bgImageBackFilter.mask = this.canvasBack;
+        this.bgImage.y = 0;
+        this.bgImageBack.y = 0;
     }
 
     // Draw the map bitmap to a canvas to use
