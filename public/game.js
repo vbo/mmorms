@@ -1,4 +1,5 @@
 window.onload = function () {
+    "use strict";
     var conn;
     var myClientId;
     var tanks = {};
@@ -189,6 +190,7 @@ window.onload = function () {
         };
         conn.onmessage = function (evt) {
             var dataView = new DataView(evt.data);
+            var messageByteView = new Uint8Array(evt.data);
             // TODO: Replace with DataView
             switch (dataView.getUint8(0)) {
             case MSG_IN_MAP: // map update
