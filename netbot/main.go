@@ -28,21 +28,21 @@ func createConnection(addr string) (input, output chan[]byte) {
 
     conn, _, err := websocket.DefaultDialer.Dial(addr, nil)
     if err != nil {
-		log.Fatal("dial:", err)
-	}
+        log.Fatal("dial:", err)
+    }
 
     go func() {
-		defer conn.Close()
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				return
-			}
+        defer conn.Close()
+        for {
+            _, message, err := conn.ReadMessage()
+            if err != nil {
+                log.Println("read:", err)
+                return
+            }
             input <- message
-		}
-	}()
-    
+        }
+    }()
+
     go func() {
         defer conn.Close()
         for {
