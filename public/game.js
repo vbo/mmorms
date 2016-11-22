@@ -207,9 +207,7 @@ window.onload = function () {
                 } else {
                     mapSet = true;
                     mapBitmap = new DataView(evt.data, 1); 
-                    console.log("1", mapBitmap);
                     mapBitmap = dearchive(mapBitmap);
-                    console.log("2", mapBitmap);
                     render.updateMapCanvas(mapBitmap);
                 }
                 break;

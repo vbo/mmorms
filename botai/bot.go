@@ -6,21 +6,24 @@ import (
     "math/rand"
     "math"
     "fmt"
+    "log"
 )
 
 type Bot struct {
     id uint32
     input chan []byte
     output chan []byte
+    deletion chan bool
     direction byte
     gunAngle int32
     gunAngleTarget int32
 }
 
-func Start(input, output chan[]byte) {
+func Start(input, output chan []byte, deletionChan chan bool) {
     bot := Bot {
         input: input,
         output: output,
+        deletion: deletionChan,
         direction: 1,
         gunAngle: 0,
         gunAngleTarget: 0,
@@ -47,7 +50,15 @@ func Start(input, output chan[]byte) {
                     bot.gunAngleTarget = 0
                     bot.direction = 1
                     bot.gunAngle = 0
-                    bot.output <- nickName
+                    select {
+                    case <- bot.deletion:
+                        log.Println("Deleting myself as asked")
+                        close(bot.output)
+                        return
+                    default:
+                        log.Println("No deletion asked, rejoining")
+                        bot.output <- nickName
+                    }
                 }
             }
         default:

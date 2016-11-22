@@ -8,7 +8,7 @@ import (
 
 const CHANNEL_SIZE = 8096
 
-func createBot(net *Network) {
+func createBot(net *Network, deletionChan chan bool) {
     client := &Client{
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
@@ -17,16 +17,20 @@ func createBot(net *Network) {
     net.connect <- client
     log.Println("Bot client connecting...")
     input := client.outgoing
-    output := translateOutputChannel(client.id, net.incoming)
-    botai.Start(input, output)
+    output := translateOutputChannel(client, net.incoming, net.disconnect)
+    botai.Start(input, output, deletionChan)
 }
 
-func translateOutputChannel(id uint32, c chan Message) chan []byte {
+func translateOutputChannel(client *Client, c chan Message, disconnect chan *Client) chan []byte {
     botch := make(chan []byte, MESSAGE_QUEUE_SIZE)
     go func () {
         for {
-            m := <-botch
-            c <- Message{from: id, data: m}
+            m, ok := <-botch
+            if !ok {
+                disconnect <-client
+                return
+            }
+            c <- Message{from: client.id, data: m}
         }
     }()
     return botch

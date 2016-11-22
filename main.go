@@ -46,6 +46,7 @@ const DESTROYED_FRACTION_TO_SPACE = 0.05
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
+const POPULATION_CHECK_TIMEOUT = 60000 * time.Millisecond
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -67,7 +68,7 @@ const (
     MSG_IN_START = 32
 )
 
-const NUM_BOTS = 0
+const MIN_NUM_PLAYERS = 5
 
 const TARGET_TICK_TIME = 200 * time.Millisecond
 
@@ -217,6 +218,9 @@ func gameLoop(net *Network) {
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
 
+    lastPopulationCheck := time.Time{}
+    botDeletionChan := make(chan bool, 2)
+
     // map transfer variables
     numGroundDestroyed := 0
     newMapChannel := make(chan []byte)
@@ -237,6 +241,25 @@ func gameLoop(net *Network) {
     var memStats, prevMemStats runtime.MemStats
 
     for {
+        // adding bots
+        if len(tanks) < MIN_NUM_PLAYERS {
+            if lastPopulationCheck == (time.Time{}) {
+                lastPopulationCheck = time.Now()
+            } else {
+                if time.Now().Sub(lastPopulationCheck) > 1000 * time.Millisecond {
+                    go createBot(net, botDeletionChan)
+                    lastPopulationCheck = time.Time{}
+                }
+            }
+        } else {
+            lastPopulationCheck = time.Time{}
+            if len(tanks) > MIN_NUM_PLAYERS && len(botDeletionChan) == 0 {
+                log.Println("Deletion asked")
+                botDeletionChan <-true
+            }
+        }
+
+        // writing stats
         if curTick % 1000 == 0 {
             runtime.ReadMemStats(&memStats)
             var numGCDiff = memStats.NumGC - prevMemStats.NumGC
@@ -721,9 +744,6 @@ func main() {
     net.Init()
 
     go gameLoop(&net)
-    for i := 0; i < NUM_BOTS; i++ {
-        go createBot(&net)
-    }
 
     err := runServer(&net, *addr)
     if err != nil {
