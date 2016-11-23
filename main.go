@@ -42,7 +42,7 @@ const TANK_GUN_LENGTH = 30
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
 
-const DESTROYED_FRACTION_TO_SPACE = 0.05
+const DESTROYED_FRACTION_TO_SPACE = 0.25
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
@@ -68,9 +68,9 @@ const (
     MSG_IN_START = 32
 )
 
-const MIN_NUM_PLAYERS = 5
+const MIN_NUM_PLAYERS = 0
 
-const TARGET_TICK_TIME = 100 * time.Millisecond
+const TARGET_TICK_TIME = 50 * time.Millisecond
 
 func NewTank() *Tank {
     return &Tank{

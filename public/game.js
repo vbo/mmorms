@@ -1,5 +1,6 @@
 window.onload = function () {
     "use strict";
+
     var conn;
     var myClientId;
     var tanks = {};
@@ -26,6 +27,9 @@ window.onload = function () {
     var MSG_OUT_SHOOTING = 1
     var MSG_OUT_START = 32
     var GROUP = Math.round(Math.random()*100) % 2;
+
+    var SERVER_TICK_DELAY = 50;
+    var INTERPOLATION_ENABLED = false;
 
     var mapSet = false;
     var spaceMode = false;
@@ -110,19 +114,41 @@ window.onload = function () {
     function Bullet (x, y, id) {
         this.x = x;
         this.y = y;
+        this.vx = 0;
+        this.vy = 0;
         this.id = id;
+        this.lastTickTime = performance.now();
         this.shape = new createjs.Shape();
         this.shape.graphics.beginFill("Red").drawCircle(0, 0, 5);
-        this.shape.x = this.x;
-        this.shape.y = this.y;
+        if (!INTERPOLATION_ENABLED) {
+            this.shape.x = this.x;
+            this.shape.y = this.y;
+        } else {
+            this.shape.x = -100;
+            this.shape.y = -100;
+            //this.shape.x = this.x;
+            //this.shape.y = this.y;
+            this.lastTickTime = performance.now();
+        }
         render.stage.addChild(this.shape);
     }
 
     Bullet.prototype.updateState = function(x, y) {
+        if (!INTERPOLATION_ENABLED) {
+            this.shape.x = x;
+            this.shape.y = y;
+        } else if (this.shape.x < -99) {
+            this.shape.x = this.x;
+            this.shape.y = this.y;    
+        }
         this.x = x;
         this.y = y;
-        this.shape.x = this.x;
-        this.shape.y = this.y;
+        var curTime = performance.now();
+        if (INTERPOLATION_ENABLED) {
+            this.vx = (this.x - this.shape.x) / (curTime - this.lastTickTime); 
+            this.vy = (this.y - this.shape.y) / (curTime - this.lastTickTime);
+        }
+        this.lastTickTime = curTime;
     }
 
     var MAX_LEADERS = 10;
@@ -486,12 +512,24 @@ window.onload = function () {
     var i = 0;
     var deltas = [];
     createjs.Ticker.on("tick", tick);
-    createjs.Ticker.setFPS(60);
+    createjs.Ticker.setFPS(30);
+    var deltaTime = 0;
     function tick(evt) {
+        var curTime = performance.now();
+        if (INTERPOLATION_ENABLED) {
+            for (var id in bullets) {
+                var bullet = bullets[id];
+                if (bullet.shape.x < -99) {
+                    console.log("invisible, don't care yet");
+                    continue;
+                }
+                bullet.shape.x += (bullet.vx * deltaTime) | 0;
+                bullet.shape.y += (bullet.vy * deltaTime) | 0;
+            }
+        }
         render.redraw();
-
         var endTime = performance.now();
-        var deltaTime = endTime - startTime;
+        deltaTime = endTime - startTime;
         startTime = endTime;
         fpsLabel.text = (1000/average(deltas))|0;
         deltas[i%8] = deltaTime;
