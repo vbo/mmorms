@@ -14,7 +14,8 @@ func main() {
 
     for i := 0; i < *cnt; i++ {
         input, output := createConnection(*addr)
-        go botai.Start(input, output)
+        deletion := make(chan bool)
+        go botai.Start(input, output, deletion)
     }
 
     for {
