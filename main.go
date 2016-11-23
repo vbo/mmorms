@@ -68,7 +68,7 @@ const (
     MSG_IN_START = 32
 )
 
-const MIN_NUM_PLAYERS = 0
+const MIN_NUM_PLAYERS = 5
 
 const TARGET_TICK_TIME = 50 * time.Millisecond
 
@@ -226,6 +226,7 @@ func gameLoop(net *Network) {
     newMapChannel := make(chan []byte)
     startOfSpaceMode := make(chan bool, 2)
     var newMapBitmap []byte
+    var newMapBitmapArchive []byte
     var spaceStartTime time.Time
     spaceMode := false
     var newTanksPos map[uint32]float64
@@ -295,6 +296,9 @@ func gameLoop(net *Network) {
             //log.Printf("Client %d connected.", client.id)
             client.outgoing <- greetingMsg[0:]
             client.outgoing <- mapBitmapBufferCopy
+            if newMapBitmap != nil {
+                client.outgoing <- newMapBitmapArchive
+            }
             //log.Println("Map & greetings sent")
             if !client.observer {
                 tanks[client.id] = NewTank()
@@ -328,7 +332,7 @@ func gameLoop(net *Network) {
             statsRequest.done <- true
 
         case newMapBitmap = <-newMapChannel:
-            newMapBitmapArchive := make([]byte, len(newMapBitmap))
+            newMapBitmapArchive = make([]byte, len(newMapBitmap))
             newMapBitmapArchive[0] = newMapBitmap[0]
             mapArchiveSize := archiveMap(newMapBitmap[1:], newMapBitmapArchive[1:])
             newMapBitmapArchive = newMapBitmapArchive[0:mapArchiveSize + 1]
@@ -347,7 +351,6 @@ func gameLoop(net *Network) {
             mapChangeMsg := make([]byte, 2)
             mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
             mapChangeMsg[1] = 1
-            // TODO(vbo): what if client connects during space mode?
             for _,client := range clients {
                 client.outgoing <- mapChangeMsg
             }
@@ -422,6 +425,9 @@ func gameLoop(net *Network) {
                             log.Printf("%s joined", string(client.name))
                             client.lifeFrags = 0
                             tanks[client.id] = NewTank()
+                            if spaceMode {
+                                newTanksPos = getNewTanksPos(tanks, newMapBitmap[1:])
+                            }
                         }
 
                     // TODO(vbo): what if no cases match message type?
@@ -462,6 +468,7 @@ func gameLoop(net *Network) {
                 spaceMode = false
                 copy(mapBitmapBuffer[1:], newMapBitmap[1:])
                 newMapBitmap = nil
+                newMapBitmapArchive = nil
                 numGroundDestroyed = 0
                 log.Println("Trasfer finished")
 
@@ -749,8 +756,8 @@ func isGroundI(x int32, y int32, mapBitmap []byte) bool {
 }
 
 func main() {
-    flag.Parse()
     var addr = flag.String("addr", ":8080", "http service address")
+    flag.Parse()
     rand.Seed(time.Now().UTC().UnixNano())
 
     var net Network
