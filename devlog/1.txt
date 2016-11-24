@@ -1,0 +1,34 @@
+Tankoids - a real-time multiplayer artillery game [DEMO]
+========================================================
+
+Hello everyone,
+
+We've been working on this for about two weeks now. The core gameplay prototype is ready and we are somewhat happy about it. So we thought it's a good time to start a devlog.
+
+The idea is to build a real-time multiplayer action game on top of Worms-like artillery shooting and explodable terrain mechanics. Each player controls a single unit - a slowly moving armoured vehicle which shoots high-explosive projectiles. The terrain starts as a smoothly curved surface and gets deformed with each explosion causing the landscape to change dramatically over the course of a game round. Every game session is somewhat unique in this regard. When the map terrain is mostly destroyed the next map unveils itself on the background and the battle gets smoothly transitioned to the new ground.
+
+Here is some in-game footage - actually multiplayed over the internet:
+[VIDEO]
+
+Some screenshots:
+[SCREEN1][SCREEN2]
+
+We don't have any plans for a single-player experience as of now. We wanted to start with a solid deathmatch implementation and then maybe experiment with co-op and team-based modes. We haven't figured out what the weapon/ammo system should look like just yet and whether we'll go with class-based, loadout-based style or something else.
+
+Another area of exploration is the size and layout of the map. The current version has a very small map which fits a single screen. This creates a very fun and dynamic gameplay but is very limiting in terms of tactics. Tankoids move slowly by design so larger maps would be a bit boring to traverse unless we come up with some sort of a quick transportation mechanic.
+
+Tech
+----
+The server is written in Go and we think it's a good fit. We are pretty happy with it's performance for now and there are still lots of optimization opportunities. It remains to be seen whether we are going to distribute the server software with the game or just provide free hosted instances but it's technically possible to do both with Go which is always a plus.
+
+For the client we started with a simple browser-based implementation in javascript. Performance is not so bad in modern browsers and we run it at 30FPS to not set your laps on fire. Functionally it is playable but there is currently no client side interpolation whatsoever so animations look a bit choppy. I would definitely like to build a real desktop client for the game but for now this way is easier for us to iterate on and distribute new versions - all clients magically always run the most recent version without any hassle on our side.
+
+The client-server communications go over TCP (which is pretty much the only option for the browser). Fortunately the game is relatively slow-paced so lags don't hurt the gameplay that much. We rolled a very simple binary message protocol on top of this and it works just fine for now. Big area of improvements is to compress the messages as much as possible. Currently we only compress the map (both initial loading and explosion effects) and this already reduces the network load dramatically.
+
+Us
+--
+We are a team of two professional programmers living in two very different parts of the world. We see gamedev as a hobby and a way to get our feet wet with new technologies and ideas. We shipped a couple of games in the past and abandoned dozens more at different stages of development. As you probably noticed we are lacking any artistic skills whatsoever but always trying to make our programmer's art as not terrible as humanly possible.
+
+Demo
+----
+We are running a single server instance for demo purposes: http://tankoids.online/. It runs on a Digital Ocean Linux box located in Europe. Please check this out and let us know if it makes any sense. Some bots are always playing there so you can use them as practice targets.

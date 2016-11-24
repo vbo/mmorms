@@ -494,15 +494,8 @@ func gameLoop(net *Network) {
 
         sleepStart := time.Now()
         timeBeforeSleep :=  sleepStart.Sub(startTime)
-	timeToSleep := TARGET_TICK_TIME - timeBeforeSleep
+        timeToSleep := TARGET_TICK_TIME - timeBeforeSleep
         time.Sleep(timeToSleep)
-	timeSlept := time.Now().Sub(sleepStart)
-	missSleep := timeSlept - timeToSleep
-	if missSleep > 2 * time.Millisecond {
-		log.Printf("OVERSLEPT Slept %s, wanted %s", timeSlept, timeToSleep)
-	} else if missSleep < -2 * time.Millisecond {
-		log.Printf("UNDERSLEPT Slept %s, wanted %s", timeSlept, timeToSleep)
-	}
 
         newTime := time.Now()
         dtTotal = newTime.Sub(startTime)
@@ -513,7 +506,7 @@ func gameLoop(net *Network) {
         lastDtTotal = dtTotal
         if lastDtTotal > maxDtTotal { maxDtTotal = lastDtTotal }
 
-	if timeBeforeSleep > maxTimeBeforeSleep { maxTimeBeforeSleep = timeBeforeSleep }
+        if timeBeforeSleep > maxTimeBeforeSleep { maxTimeBeforeSleep = timeBeforeSleep }
     }
 }
 
