@@ -339,6 +339,29 @@ window.onload = function () {
                         console.log("BUG!")
                     } else {
                         explodeAt(mapBitmap, x, y, radius);
+                        if (radius > 20) {
+                            var explosion = new createjs.Bitmap("/explosion5.png");
+                            explosion.scaleX = 0.1;
+                            explosion.scaleY = 0.1;
+                            explosion.x = x;
+                            explosion.y = y;
+                            explosion.rotation = Math.random() * 360;
+                            render.stage.addChild(explosion);
+                            explosion.regX = 64;
+                            explosion.regY = 64;
+                            var times = 3;
+                            function animateExplosion() {
+                                if (times > 0) {
+                                    explosion.scaleX += 0.2;
+                                    explosion.scaleY += 0.2;
+                                    setTimeout(animateExplosion, 100);
+                                    times--;
+                                } else {
+                                    render.stage.removeChild(explosion);
+                                }
+                            }
+                            animateExplosion();
+                        }
                     }
                 }
                 if (tanks.hasOwnProperty(deadId)) {
@@ -351,27 +374,6 @@ window.onload = function () {
                     delete tanks[deadId];
                 } else if (bullets.hasOwnProperty(deadId)) {
                     var bullet = bullets[deadId];
-                    var explosion = new createjs.Bitmap("/explosion5.png");
-                    explosion.scaleX = 0.1;
-                    explosion.scaleY = 0.1;
-                    explosion.x = x;
-                    explosion.y = y;
-                    explosion.rotation = Math.random() * 360;
-                    render.stage.addChild(explosion);
-                    explosion.regX = 64;
-                    explosion.regY = 64;
-                    var times = 3;
-                    function animateExplosion() {
-                        if (times > 0) {
-                            explosion.scaleX += 0.2;
-                            explosion.scaleY += 0.2;
-                            setTimeout(animateExplosion, 100);
-                            times--;
-                        } else {
-                            render.stage.removeChild(explosion);
-                        }
-                    }
-                    animateExplosion();
                     render.stage.removeChild(bullet.shape);
                     delete bullets[deadId];
                 }
