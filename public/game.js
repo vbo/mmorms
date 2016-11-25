@@ -36,6 +36,7 @@ window.onload = function () {
 
     var inputState = {
       moving: 0,
+      changingAngle: 0,
       power: 0,
       direction: 1
     };
@@ -385,17 +386,17 @@ window.onload = function () {
         return;
     }
 
-    function changeAngle(arrowUp) {
+    function changeAngle(arrowUp, rate) {
         var cosAngle = Math.cos(me().gun.rotation * Math.PI / 180);
         var sinAngle = Math.sin(me().gun.rotation * Math.PI / 180);
-        if (!arrowUp && sinAngle > 0 && Math.abs(cosAngle) < 0.92) {
+        if (arrowUp < 0 && sinAngle > 0 && Math.abs(cosAngle) < 0.92) {
             return; // gun is already too low
         }
-        if (arrowUp && sinAngle < 0 && Math.abs(cosAngle) < 0.09) {
+        if (arrowUp > 0 && sinAngle < 0 && Math.abs(cosAngle) < 0.09) {
             return; // gun is already too high
         }
-        var inc = 2 * cosAngle / Math.abs(cosAngle);
-        me().gun.rotation += arrowUp ? -1 * inc : inc;
+        var inc = rate * cosAngle / Math.abs(cosAngle);
+        me().gun.rotation -= arrowUp * inc;
     }
 
     function getShootingPower(inputState) {
@@ -428,7 +429,7 @@ window.onload = function () {
             inputState.moving = newDir;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-            changeAngle(e.code == "ArrowUp");
+            inputState.changingAngle = (e.code == "ArrowUp" ? 1 : -1);
         }
         if (e.code == "Space") {
             if (inputState.power == 0) {
@@ -453,6 +454,9 @@ window.onload = function () {
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
           inputState.moving = 0;
+        }
+        if (e.code == "ArrowUp" || e.code == "ArrowDown") {
+            inputState.changingAngle = 0;
         }
         if (e.code == "Space") {
             inputState.power = getShootingPower(inputState);
@@ -528,6 +532,9 @@ window.onload = function () {
                 bullet.shape.x += (bullet.vx * deltaTime) | 0;
                 bullet.shape.y += (bullet.vy * deltaTime) | 0;
             }
+        }
+        if (me() && inputState.changingAngle != 0) {
+            changeAngle(inputState.changingAngle, 0.07 * deltaTime);
         }
         render.redraw();
         var endTime = performance.now();
