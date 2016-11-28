@@ -17,6 +17,7 @@ type Tank struct {
     moving int8
     gunAngle int32
     hp uint32
+    lastShotTime time.Time
 }
 
 type Bullet struct {
@@ -40,6 +41,7 @@ const TANK_RAD = 15
 const TANK_SPEED = 20
 const TANK_TOWER_HEIGHT = 25
 const TANK_GUN_LENGTH = 30
+const TANK_SHOT_DELAY = 500 * time.Millisecond
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
 
@@ -410,7 +412,8 @@ func gameLoop(net *Network) {
 
                     case MSG_IN_SHOOTING: // shooting
                         tank, ok := tanks[client.id]
-                        if ok && !spaceMode {
+                        if ok && !spaceMode && startTime.Sub(tank.lastShotTime) > TANK_SHOT_DELAY {
+                            tank.lastShotTime = startTime
                             aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                             aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
                             power := float64(message.data[9])
@@ -434,7 +437,6 @@ func gameLoop(net *Network) {
                                 vx: vx,
                                 vy: vy,
                             })
-
                             //log.Printf("New wild bullet created %d", id)
                         }
 
