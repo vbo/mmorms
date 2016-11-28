@@ -18,7 +18,7 @@ type Tank struct {
     jumping bool
     gunAngle int32
     hp uint32
-    shield byte
+    shield bool
     lastShotTime time.Time
     shieldFlipTime time.Time
 }
@@ -79,7 +79,7 @@ const (
     MSG_IN_START = 32
 )
 
-const MIN_NUM_PLAYERS = 5
+const MIN_NUM_PLAYERS = 0
 
 const TARGET_TICK_TIME = 50 * time.Millisecond
 
@@ -237,8 +237,8 @@ func simulateWorld(
                 delete(tanks, tankID)
             }
             // Drop shields
-            if tank.shield == 1 && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_DURATION {
-                tank.shield = 0
+            if tank.shield && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_DURATION {
+                tank.shield = false
                 tank.shieldFlipTime = startTime
             }
         }
@@ -458,8 +458,8 @@ func gameLoop(net *Network) {
 
                     case MSG_IN_SHIELD:
                         tank, ok := tanks[client.id]
-                        if ok && !spaceMode && tank.shield == 0 && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
-                            tank.shield = 1
+                        if ok && !spaceMode && !tank.shield && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
+                            tank.shield = true
                             tank.shieldFlipTime = startTime
                         }
 
@@ -538,7 +538,7 @@ func gameLoop(net *Network) {
         }
 
         // Broadcast world snapshot
-        broadcastTanks(tanks, clients)
+        broadcastTanks(tanks, clients, startTime)
         broadcastBullets(bullets, clients)
         broadcastLeaderboard(clients)
 
@@ -653,7 +653,7 @@ func broadcastLeaderboard(clients map[uint32]*Client) {
     }
 }
 
-func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
+func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTime time.Time) {
     // TODO:(vbo): scratch memory arena reuse ideas:
     //  - Under normal load we expect any send operation
     //    to be finished after no more than N server ticks.
@@ -675,7 +675,16 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
         binary.LittleEndian.PutUint32(message[8:], uint32(tank.y))
         binary.LittleEndian.PutUint32(message[12:], uint32(tank.hp))
         binary.LittleEndian.PutUint32(message[16:], uint32(tank.gunAngle))
-        binary.LittleEndian.PutUint32(message[20:], uint32(tank.shield)) // TODO(vbo): pack flags
+        var shieldInfo uint32
+        sinceFlip := startTime.Sub(tank.shieldFlipTime)
+        if tank.shield {
+            percent := math.Min(sinceFlip.Seconds()/TANK_SHIELD_DURATION.Seconds(), 1)
+            shieldInfo = 0xFF000000 + uint32(percent*255)
+        } else {
+            percent := math.Min(sinceFlip.Seconds()/TANK_SHIELD_COOLDOWN.Seconds(), 1)
+            shieldInfo = 0x00000000 + uint32(percent*255)
+        }
+        binary.LittleEndian.PutUint32(message[20:], shieldInfo)
         message = message[24:]
     }
     for _, client := range clients {
@@ -743,7 +752,7 @@ func explodeAt(cx int32,
     }
     // Hit tanks
     for tankID, tank := range tanks {
-        if tank.shield == 1 { continue }
+        if tank.shield { continue }
         dx := coordToPixel(tank.x) - cx
         dy := coordToPixel(tank.y) - cy
         ds := dx*dx + dy*dy

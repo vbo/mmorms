@@ -58,7 +58,7 @@ window.onload = function () {
         document.getElementById("login").style.display = "block";
     }
 
-    function Tank (x, y, hp, angle, shield, clientId) {
+    function Tank (x, y, hp, angle, shield, shieldPercent, clientId) {
         this.x = x;
         this.y = y;
         this.gunAngle = angle;
@@ -76,6 +76,10 @@ window.onload = function () {
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.shield = new createjs.Shape();
         this.shield.graphics.beginStroke("blue").drawCircle(0, 0, 35);
+        this.shieldBar = new createjs.Shape();
+        this.shieldBar.graphics.beginStroke("white").drawRect(-3, -1, 7, 2);
+        this.shieldBar.scaleX = shield ? (1 - shieldPercent) : shieldPercent;
+        this.shieldBar.shadow = new createjs.Shadow("white", 0, 0, 2);
         this.shield.visible = !!shield;
         this.nickLabel.textAlign = "center";
         this.nickLabel.maxWidth = 100;
@@ -83,6 +87,8 @@ window.onload = function () {
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
         this.shape.addChild(this.shield);
+        this.shape.addChild(this.shieldBar);
+        this.shape.addChild(this.nickLabel);
         this.gun.regX = 46;
         this.gun.regY = 25;
         this.gun.rotation = angle;
@@ -91,13 +97,13 @@ window.onload = function () {
         this.hpLabel.regX = 10;
         this.hpLabel.regY = -35;
         this.shield.regY = -10;
+        this.shieldBar.regY = 0;
         // TODO: Text-align center 
         this.nickLabel.regY = 25;
-        this.shape.addChild(this.nickLabel);
         render.stage.addChild(this.shape);
     }
 
-    Tank.prototype.updateState = function(x, y, hp, angle, shield) {
+    Tank.prototype.updateState = function(x, y, hp, angle, shield, shieldPercent) {
         this.x = x;
         this.y = y;
         this.hp = hp;
@@ -105,6 +111,7 @@ window.onload = function () {
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
         this.shield.visible = !!shield;
+        this.shieldBar.scaleX = shield ? (1 - shieldPercent) : shieldPercent;
         if (!me() || me().clientId != this.clientId) {
             this.gunAngle = angle;
             this.gun.rotation = angle;
@@ -279,7 +286,10 @@ window.onload = function () {
                     var tankClientY = messageView[i*6 + 2];
                     var tankClientHp = messageView[i*6 + 3];
                     var tankGunAngle = messageView[i*6 + 4];
-                    var shield = messageView[i*6 + 5];
+                    var shieldInfo = messageView[i*6 + 5];
+                    var shield = shieldInfo >> 24;
+                    var shieldPercent = (shieldInfo & 0xFF)/255;
+                    console.log(shield, shieldPercent);
                     if (!tanks[clientId]) {
                         tanks[clientId] =
                             new Tank(tankClientX,
@@ -287,6 +297,7 @@ window.onload = function () {
                                 tankClientHp,
                                 tankGunAngle,
                                 shield,
+                                shieldPercent,
                                 clientId);
                     } else {
                         tanks[clientId].updateState(
@@ -294,7 +305,8 @@ window.onload = function () {
                             tankClientY,
                             tankClientHp,
                             tankGunAngle,
-                            shield);
+                            shield,
+                            shieldPercent);
                     }
                 }
                 break;
