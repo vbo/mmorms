@@ -226,14 +226,6 @@ func simulateWorld(
             // Explode dead tanks.
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(
-                    coordToPixel(tank.x),
-                    coordToPixel(tank.y),
-                    TANK_RAD,
-                    mapBitmap,
-                    tanks,
-                    clients[tankID],
-                    numGroundDestroyed)
                 delete(tanks, tankID)
             }
             // Drop shields
