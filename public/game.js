@@ -25,6 +25,7 @@ window.onload = function () {
 
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
+    var MSG_OUT_SHIELD = 2
     var MSG_OUT_START = 32
     var GROUP = Math.round(Math.random()*100) % 2;
 
@@ -56,7 +57,7 @@ window.onload = function () {
         document.getElementById("login").style.display = "block";
     }
 
-    function Tank (x, y, hp, angle, clientId) {
+    function Tank (x, y, hp, angle, shield, clientId) {
         this.x = x;
         this.y = y;
         this.gunAngle = angle;
@@ -72,11 +73,15 @@ window.onload = function () {
         this.body = new createjs.Bitmap("/tank6-body.png");
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
+        this.shield = new createjs.Shape();
+        this.shield.graphics.beginStroke("blue").drawCircle(0, 0, 35);
+        this.shield.visible = !!shield;
         this.nickLabel.textAlign = "center";
         this.nickLabel.maxWidth = 100;
         this.shape.addChild(this.gun);
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
+        this.shape.addChild(this.shield);
         this.gun.regX = 46;
         this.gun.regY = 25;
         this.gun.rotation = angle;
@@ -84,19 +89,21 @@ window.onload = function () {
         this.body.regY = 25;
         this.hpLabel.regX = 10;
         this.hpLabel.regY = -35;
+        this.shield.regY = -10;
         // TODO: Text-align center 
         this.nickLabel.regY = 25;
         this.shape.addChild(this.nickLabel);
         render.stage.addChild(this.shape);
     }
 
-    Tank.prototype.updateState = function(x, y, hp, angle) {
+    Tank.prototype.updateState = function(x, y, hp, angle, shield) {
         this.x = x;
         this.y = y;
         this.hp = hp;
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
+        this.shield.visible = !!shield;
         if (!me() || me().clientId != this.clientId) {
             this.gunAngle = angle;
             this.gun.rotation = angle;
@@ -266,23 +273,27 @@ window.onload = function () {
                 var clientsNum = messageByteView[1];
                 var messageView = new Int32Array(evt.data.slice(2));
                 for (var i = 0; i < clientsNum; i++) {
-                    var clientId = messageView[i*5];
-                    var tankClientX = messageView[i*5 + 1];
-                    var tankClientY = messageView[i*5 + 2];
-                    var tankClientHp = messageView[i*5 + 3];
-                    var tankGunAngle = messageView[i*5 + 4];
+                    var clientId = messageView[i*6];
+                    var tankClientX = messageView[i*6 + 1];
+                    var tankClientY = messageView[i*6 + 2];
+                    var tankClientHp = messageView[i*6 + 3];
+                    var tankGunAngle = messageView[i*6 + 4];
+                    var shield = messageView[i*6 + 5];
                     if (!tanks[clientId]) {
                         tanks[clientId] =
                             new Tank(tankClientX,
                                 tankClientY,
                                 tankClientHp,
                                 tankGunAngle,
+                                shield,
                                 clientId);
                     } else {
-                        tanks[clientId].updateState(tankClientX,
+                        tanks[clientId].updateState(
+                            tankClientX,
                             tankClientY,
                             tankClientHp,
-                            tankGunAngle);
+                            tankGunAngle,
+                            shield);
                     }
                 }
                 break;
@@ -473,6 +484,12 @@ window.onload = function () {
             inputState.power = 0;
             me().gun.filters = [];
             me().gun.cache(0, 0, 100, 100);
+        }
+        if (e.key == "z") {
+            var messageBuffer = new ArrayBuffer(1);
+            var dataView = new DataView(messageBuffer);
+            dataView.setUint8(0, MSG_OUT_SHIELD);
+            conn.send(messageBuffer);
         }
     });
 

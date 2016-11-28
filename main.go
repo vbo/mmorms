@@ -17,7 +17,9 @@ type Tank struct {
     moving int8
     gunAngle int32
     hp uint32
+    shield byte
     lastShotTime time.Time
+    shieldFlipTime time.Time
 }
 
 type Bullet struct {
@@ -44,6 +46,8 @@ const TANK_GUN_LENGTH = 30
 const TANK_SHOT_DELAY = 500 * time.Millisecond
 const TANK_WIDTH = 50
 const TANK_HEIGHT = 20
+const TANK_SHIELD_DURATION = 2000 * time.Millisecond
+const TANK_SHIELD_COOLDOWN = 5000 * time.Millisecond
 
 const DESTROYED_FRACTION_TO_SPACE = 0.25
 
@@ -68,6 +72,7 @@ const (
 const (
     MSG_IN_MOVING = 0
     MSG_IN_SHOOTING = 1
+    MSG_IN_SHIELD = 2
     MSG_IN_START = 32
 )
 
@@ -126,6 +131,7 @@ func simulateWorld(
     bulletsIn *[]Bullet,
     mapBitmap []byte,
     dtTotalSeconds float64,
+    startTime time.Time,
     clients map[uint32]*Client,
     numGroundDestroyed *int) {
 
@@ -211,8 +217,8 @@ func simulateWorld(
                 bulletIndex++
             }
         }
-        // Explode and respawn dead tanks.
         for tankID, tank := range tanks {
+            // Explode dead tanks.
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
                 explodeAt(
@@ -224,6 +230,11 @@ func simulateWorld(
                     clients[tankID],
                     numGroundDestroyed)
                 delete(tanks, tankID)
+            }
+            // Drop shields
+            if tank.shield == 1 && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_DURATION {
+                tank.shield = 0
+                tank.shieldFlipTime = startTime
             }
         }
     }
@@ -402,7 +413,7 @@ func gameLoop(net *Network) {
                 }
                 client.ping = message.ping
                 switch message.data[0] {
-                    case MSG_IN_MOVING: // moving
+                    case MSG_IN_MOVING:
                         _, ok := tanks[client.id]
                         if ok {
                             tanks[client.id].moving = int8(message.data[1])
@@ -410,7 +421,7 @@ func gameLoop(net *Network) {
                                 int32(binary.LittleEndian.Uint32(message.data[2:]))
                         }
 
-                    case MSG_IN_SHOOTING: // shooting
+                    case MSG_IN_SHOOTING:
                         tank, ok := tanks[client.id]
                         if ok && !spaceMode && startTime.Sub(tank.lastShotTime) > TANK_SHOT_DELAY {
                             tank.lastShotTime = startTime
@@ -440,7 +451,14 @@ func gameLoop(net *Network) {
                             //log.Printf("New wild bullet created %d", id)
                         }
 
-                    case MSG_IN_START: // start
+                    case MSG_IN_SHIELD:
+                        tank, ok := tanks[client.id]
+                        if ok && !spaceMode && tank.shield == 0 && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
+                            tank.shield = 1
+                            tank.shieldFlipTime = startTime
+                        }
+
+                    case MSG_IN_START:
                         _, ok := tanks[client.id]
                         if !ok {
                             client.name = message.data[1:]
@@ -474,6 +492,7 @@ func gameLoop(net *Network) {
                 &bullets,
                 mapBitmap,
                 dtTotalSeconds,
+                startTime,
                 /* TODO(vbo): remove */ clients,
                 &numGroundDestroyed)
         } else {
@@ -634,7 +653,7 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
     //    the data pointer with the actual curTick at the send time.
     //  - A different solution is to preallocate a pool
     //    of reference counted arenas.
-    stateMessageBuffer := make([]byte, 2 + len(tanks) * 20)
+    stateMessageBuffer := make([]byte, 2 + len(tanks) * 24)
     stateMessageBuffer[0] = MSG_OUT_STATE
     stateMessageBuffer[1] = byte(len(tanks))
     message := stateMessageBuffer[2:]
@@ -644,7 +663,8 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client) {
         binary.LittleEndian.PutUint32(message[8:], uint32(tank.y))
         binary.LittleEndian.PutUint32(message[12:], uint32(tank.hp))
         binary.LittleEndian.PutUint32(message[16:], uint32(tank.gunAngle))
-        message = message[20:]
+        binary.LittleEndian.PutUint32(message[20:], uint32(tank.shield)) // TODO(vbo): pack flags
+        message = message[24:]
     }
     for _, client := range clients {
         client.outgoing <- stateMessageBuffer[0 : len(stateMessageBuffer)]
@@ -711,6 +731,7 @@ func explodeAt(cx int32,
     }
     // Hit tanks
     for tankID, tank := range tanks {
+        if tank.shield == 1 { continue }
         dx := coordToPixel(tank.x) - cx
         dy := coordToPixel(tank.y) - cy
         ds := dx*dx + dy*dy

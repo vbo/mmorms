@@ -94,6 +94,12 @@ func Start(input, output chan []byte, deletionChan chan bool) {
                 bot.gunAngleTarget = int32(rand.Intn(180)) - 90
             }
             bot.output <- msgData
+
+            // Always try enabling shield!
+            msgData = make([]byte, 1)
+            msgData[0] = 2 //MSG_IN_SHIELD
+            bot.output <- msgData
+
             time.Sleep(200 * time.Millisecond)
         }
     }
