@@ -40,7 +40,7 @@ const BULLET_SPEED = 20
 const GRAV_ACC = 30
 const GRAV_SPEED = 100
 
-const TANK_RAD = 15
+const TANK_RAD = 0
 const TANK_SPEED = 20
 const TANK_AIR_ACC = 4
 const TANK_TOWER_HEIGHT = 25
