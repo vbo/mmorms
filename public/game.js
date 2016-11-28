@@ -79,7 +79,7 @@ window.onload = function () {
         this.shield.alpha = 0.1;
         this.shieldBar = new createjs.Shape();
         this.shieldBar.graphics.beginStroke("white").drawRect(-3, -1, 7, 2);
-        this.shieldBar.scaleX = shield ? (1 - shieldPercent) : shieldPercent;
+        this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
         this.shieldBar.shadow = new createjs.Shadow("white", 0, 0, 2);
         this.shield.visible = !!shield;
         this.nickLabel.textAlign = "center";
@@ -112,14 +112,27 @@ window.onload = function () {
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
         this.shield.visible = !!shield;
-        this.shieldBar.scaleX = shield ? (1 - shieldPercent) : shieldPercent;
+        this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
         if (!me() || me().clientId != this.clientId) {
             this.gunAngle = angle;
             this.gun.rotation = angle;
         }
     }
 
-    Tank.prototype.updateName = function (name) {
+    Tank.prototype.updateName = function (name, lifeFrags) {
+        if (lifeFrags > 0) {
+            name += " ";
+        }
+        var required = 1;
+        while (lifeFrags > 0) {
+            if (lifeFrags >= required) {
+                name += "★";
+                lifeFrags -= required;
+                required *= 2;
+            } else {
+                break;
+            }
+        }
         this.nickLabel.text = name;
     }
 
@@ -322,7 +335,7 @@ window.onload = function () {
                     var nameView = new DataView(evt.data, p + 13, nameLen);
                     var name = utf8decoder.decode(nameView);
                     if (tanks[id]) {
-                        tanks[id].updateName(name);
+                        tanks[id].updateName(name, lifeFrags);
                     }
                     var frags = GROUP == 0 ? lifeFrags : sessionFrags;
                     leaderboard[i] = new LeaderboardEntry(id, name, frags);
@@ -374,13 +387,16 @@ window.onload = function () {
                             render.stage.addChild(explosion);
                             explosion.regX = 64;
                             explosion.regY = 64;
-                            var times = 3;
+                            var maxScale = radius / 64;
                             function animateExplosion() {
-                                if (times > 0) {
-                                    explosion.scaleX += 0.2;
-                                    explosion.scaleY += 0.2;
+                                if (explosion.scaleX < maxScale) {
+                                    explosion.scaleX += maxScale*0.4;
+                                    explosion.scaleY += maxScale*0.4;
+                                    if (explosion.scaleX > maxScale) {
+                                        explosion.scaleX = maxScale;
+                                        explosion.scaleY = maxScale;
+                                    }
                                     setTimeout(animateExplosion, 100);
-                                    times--;
                                 } else {
                                     render.stage.removeChild(explosion);
                                 }
@@ -455,7 +471,7 @@ window.onload = function () {
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
             inputState.changingAngle = (e.code == "ArrowUp" ? 1 : -1);
         }
-        if (e.code == "Space") {
+        if (e.key == "c") {
             if (inputState.power == 0) {
                 inputState.power = Date.now();
                 function updateGun() {
@@ -482,7 +498,7 @@ window.onload = function () {
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
             inputState.changingAngle = 0;
         }
-        if (e.code == "Space") {
+        if (e.key == "c") {
             inputState.power = getShootingPower(inputState);
             var a = me().gun.rotation * Math.PI / 180;
             var aimX = Math.cos(a) * 1000,

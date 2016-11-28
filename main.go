@@ -30,10 +30,10 @@ type Bullet struct {
     vx, vy float64
 }
 
-const EXPLOSION_DMG = 100
+const EXPLOSION_DMG = 70
 const EXPLOSION_DMG_FALLOFF = 2
 
-const BULLET_EXPLOSION_RAD = 30
+const BULLET_EXPLOSION_RAD = 30.0
 const BULLET_RAD = 5
 const BULLET_SPEED = 20
 
@@ -206,13 +206,23 @@ func simulateWorld(
                     coordToPixel(bullet.y),
                     tanks,
                     bullet.ownerId))  {
-                broadcastDeath(bullet.id, bullet.x, bullet.y, BULLET_EXPLOSION_RAD, clients)
+                required := uint32(1)
+                frags := clients[bullet.ownerId].lifeFrags
+                stars := uint32(0)
+                for frags > required {
+                    frags -= required
+                    stars++
+                    required *= 2
+                }
+                radius := int32(BULLET_EXPLOSION_RAD * (math.Sqrt(float64(stars)) + 1.0))
+                broadcastDeath(bullet.id, bullet.x, bullet.y, radius, clients)
                 explodeAt(
                     coordToPixel(bullet.x),
                     coordToPixel(bullet.y),
-                    BULLET_EXPLOSION_RAD,
+                    radius,
                     mapBitmap,
                     tanks,
+                    clients,
                     clients[bullet.ownerId],
                     numGroundDestroyed)
                 //log.Printf("Bullet crashed at %v, %v", bullet.x, bullet.y)
@@ -225,7 +235,7 @@ func simulateWorld(
         for tankID, tank := range tanks {
             // Explode dead tanks.
             if tank.hp == 0 {
-                broadcastDeath(tankID, tank.x, tank.y, TANK_RAD, clients)
+                broadcastDeath(tankID, tank.x, tank.y, 0, clients)
                 delete(tanks, tankID)
             }
             // Drop shields
@@ -339,15 +349,7 @@ func gameLoop(net *Network) {
         case client := <-net.disconnect:
             tank, ok := tanks[client.id]
             if ok {
-                broadcastDeath(client.id, tank.x, tank.y, TANK_RAD, clients)
-                explodeAt(
-                    coordToPixel(tank.x),
-                    coordToPixel(tank.y),
-                    TANK_RAD,
-                    mapBitmap,
-                    tanks,
-                    client,
-                    &numGroundDestroyed)
+                broadcastDeath(client.id, tank.x, tank.y, 0, clients)
                 delete(tanks, client.id)
             }
             delete(clients, client.id)
@@ -700,7 +702,7 @@ func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
     }
 }
 
-func broadcastDeath(id uint32, x float64, y float64, radius uint32,
+func broadcastDeath(id uint32, x float64, y float64, radius int32,
                     clients map[uint32]*Client) {
     var buffer [17]byte
     buffer[0] = MSG_OUT_DEATH
@@ -708,7 +710,7 @@ func broadcastDeath(id uint32, x float64, y float64, radius uint32,
     binary.LittleEndian.PutUint32(message[0:], id)
     binary.LittleEndian.PutUint32(message[4:], uint32(x))
     binary.LittleEndian.PutUint32(message[8:], uint32(y))
-    binary.LittleEndian.PutUint32(message[12:], radius)
+    binary.LittleEndian.PutUint32(message[12:], uint32(radius))
     for clientId, _ := range clients {
         clients[clientId].outgoing <- buffer[0:]
     }
@@ -720,6 +722,7 @@ func explodeAt(cx int32,
                r int32,
                mapBitmap []byte,
                tanks map[uint32]*Tank,
+               clients map[uint32]*Client,
                owner *Client,
                numGroundDestroyed *int) {
     // Destroy terrain
@@ -748,12 +751,16 @@ func explodeAt(cx int32,
         dx := coordToPixel(tank.x) - cx
         dy := coordToPixel(tank.y) - cy
         ds := dx*dx + dy*dy
-        dmg := EXPLOSION_DMG - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
+        dmg := EXPLOSION_DMG + float64(r) - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
         if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tanks[tankID].hp -= realDmg
             if (owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id) {
-                owner.lifeFrags++
+                //owner.name = append(owner.name, []byte(string('★')))
+                owner.lifeFrags += 1
+                if clients[tankID] != nil {
+                    owner.lifeFrags += clients[tankID].lifeFrags
+                }
                 owner.sessionFrags++
             }
             //log.Printf("%d[%d] hit by explosion: -%f", tankID, tank.hp, dmg)
