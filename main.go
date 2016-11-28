@@ -13,6 +13,7 @@ import (
 
 type Tank struct {
     x, y float64
+    vx, vy float64
     moving int8
     gunAngle int32
     hp uint32
@@ -93,7 +94,6 @@ func generateMapBitmap(mapBitmap []byte) {
     }
 }
 
-
 func simulateWorldInSpace(tanks map[uint32]*Tank,
                           newTanksPos map[uint32]float64,
                           dtTotalSeconds float64,
@@ -134,16 +134,25 @@ func simulateWorld(
         for _, tank := range tanks {
             oldX := tank.x
             oldY := tank.y
+            // TODO(vbo): to detach from the ground e.g. by
+            // jump or explosion wave consider tank.vy for wasOnGround.
             wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
             if !wasOnGround {
-                // TODO(vbo): fix slow hill descent by falling
-                // instantly for no more than 2 pixels
-                tank.y += GRAV_SPEED * dt
-                if (isGroundF(oldX, tank.y, mapBitmap)) {
+                tank.vy += GRAV_ACC * dt
+                tank.x += tank.vx * dt
+                if (isGroundF(tank.x, tank.y, mapBitmap)) {
+                    tank.x = oldX
+                    tank.vx = 0
+                }
+                tank.y += tank.vy * dt
+                if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.y = oldY
+                    tank.vy = 0
                 }
             } else {
-                tank.x += float64(tank.moving) * dt * TANK_SPEED
+                tank.vx = float64(tank.moving) * TANK_SPEED
+                tank.x += tank.vx * dt
+                // hill sliding mechanics:
                 if isGroundF(tank.x, oldY, mapBitmap) {
                     for i := 1; i <= 2; i++ {
                         if !isGroundF(tank.x, oldY - float64(i), mapBitmap) {
@@ -153,6 +162,16 @@ func simulateWorld(
                     }
                     if tank.y == oldY {
                         tank.x = oldX
+                    } else {
+                        tank.vx = 0
+                    }
+                } else {
+                    for i := 1; i <= 2; i++ {
+                        if isGroundF(tank.x, oldY + float64(i), mapBitmap) {
+                            break
+                        } else {
+                            tank.y = oldY + float64(i)
+                        }
                     }
                 }
             }
@@ -232,6 +251,9 @@ func gameLoop(net *Network) {
     var newTanksPos map[uint32]float64
 
     // TODO(vbo): load from predesigned file?
+    // TODO(vbo): we need precomputed surface normals for:
+    //  - grenades bouncing
+    //  - tank slope orientation
     generateMapBitmap(mapBitmap)
 
     startTime := time.Now()
@@ -387,7 +409,7 @@ func gameLoop(net *Network) {
                         }
 
                     case MSG_IN_SHOOTING: // shooting
-                        _, ok := tanks[client.id]
+                        tank, ok := tanks[client.id]
                         if ok && !spaceMode {
                             aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
                             aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
@@ -402,8 +424,8 @@ func gameLoop(net *Network) {
                             vx := BULLET_SPEED * aimX * power
                             vy := BULLET_SPEED * aimY * power
                             id := net.GetNewObjectId()
-                            x := tanks[client.id].x + TANK_GUN_LENGTH * aimX
-                            y := tanks[client.id].y - TANK_TOWER_HEIGHT * (1 - aimY)
+                            x := tank.x + TANK_GUN_LENGTH * aimX
+                            y := tank.y - TANK_TOWER_HEIGHT * (1 - aimY)
                             bullets = append(bullets, Bullet{
                                 id: id,
                                 ownerId: client.id,
@@ -412,6 +434,7 @@ func gameLoop(net *Network) {
                                 vx: vx,
                                 vy: vy,
                             })
+
                             //log.Printf("New wild bullet created %d", id)
                         }
 

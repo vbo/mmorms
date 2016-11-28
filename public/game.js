@@ -534,7 +534,7 @@ window.onload = function () {
             }
         }
         if (me() && inputState.changingAngle != 0) {
-            changeAngle(inputState.changingAngle, 0.07 * deltaTime);
+            changeAngle(inputState.changingAngle, 0.04 * deltaTime);
         }
         render.redraw();
         var endTime = performance.now();
