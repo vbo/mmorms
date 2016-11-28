@@ -75,7 +75,8 @@ window.onload = function () {
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.shield = new createjs.Shape();
-        this.shield.graphics.beginStroke("blue").drawCircle(0, 0, 35);
+        this.shield.graphics.beginStroke("blue").beginFill("blue").drawCircle(0, 0, 35);
+        this.shield.alpha = 0.1;
         this.shield.visible = !!shield;
         this.nickLabel.textAlign = "center";
         this.nickLabel.maxWidth = 100;
