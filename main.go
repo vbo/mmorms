@@ -15,6 +15,7 @@ type Tank struct {
     x, y float64
     vx, vy float64
     moving int8
+    jumping bool
     gunAngle int32
     hp uint32
     shield byte
@@ -41,6 +42,7 @@ const GRAV_SPEED = 100
 
 const TANK_RAD = 15
 const TANK_SPEED = 20
+const TANK_AIR_ACC = 4
 const TANK_TOWER_HEIGHT = 25
 const TANK_GUN_LENGTH = 30
 const TANK_SHOT_DELAY = 500 * time.Millisecond
@@ -73,6 +75,7 @@ const (
     MSG_IN_MOVING = 0
     MSG_IN_SHOOTING = 1
     MSG_IN_SHIELD = 2
+    MSG_IN_JUMP = 3
     MSG_IN_START = 32
 )
 
@@ -142,11 +145,12 @@ func simulateWorld(
         for _, tank := range tanks {
             oldX := tank.x
             oldY := tank.y
-            // TODO(vbo): to detach from the ground e.g. by
-            // jump or explosion wave consider tank.vy for wasOnGround.
             wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
-            if !wasOnGround {
+            if !wasOnGround || tank.vy < -2 {
                 tank.vy += GRAV_ACC * dt
+                if tank.jumping {
+                    tank.vx += float64(tank.moving) * TANK_AIR_ACC * dt
+                }
                 tank.x += tank.vx * dt
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.x = oldX
@@ -156,6 +160,7 @@ func simulateWorld(
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.y = oldY
                     tank.vy = 0
+                    tank.jumping = false
                 }
             } else {
                 tank.vx = float64(tank.moving) * TANK_SPEED
@@ -456,6 +461,13 @@ func gameLoop(net *Network) {
                         if ok && !spaceMode && tank.shield == 0 && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
                             tank.shield = 1
                             tank.shieldFlipTime = startTime
+                        }
+
+                    case MSG_IN_JUMP:
+                        tank, ok := tanks[client.id]
+                        if ok && isGroundF(tank.x, tank.y + 1, mapBitmap) {
+                            tank.vy = -40
+                            tank.jumping = true
                         }
 
                     case MSG_IN_START:

@@ -26,6 +26,7 @@ window.onload = function () {
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
     var MSG_OUT_SHIELD = 2
+    var MSG_OUT_JUMP = 3
     var MSG_OUT_START = 32
     var GROUP = Math.round(Math.random()*100) % 2;
 
@@ -489,6 +490,12 @@ window.onload = function () {
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHIELD);
+            conn.send(messageBuffer);
+        }
+        if (e.key == "x") {
+            var messageBuffer = new ArrayBuffer(1);
+            var dataView = new DataView(messageBuffer);
+            dataView.setUint8(0, MSG_OUT_JUMP);
             conn.send(messageBuffer);
         }
     });
