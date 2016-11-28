@@ -290,7 +290,6 @@ window.onload = function () {
                     var shieldInfo = messageView[i*6 + 5];
                     var shield = shieldInfo >> 24;
                     var shieldPercent = (shieldInfo & 0xFF)/255;
-                    console.log(shield, shieldPercent);
                     if (!tanks[clientId]) {
                         tanks[clientId] =
                             new Tank(tankClientX,

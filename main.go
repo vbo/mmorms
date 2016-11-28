@@ -79,7 +79,7 @@ const (
     MSG_IN_START = 32
 )
 
-const MIN_NUM_PLAYERS = 0
+const MIN_NUM_PLAYERS = 5
 
 const TARGET_TICK_TIME = 50 * time.Millisecond
 
