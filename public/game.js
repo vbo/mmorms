@@ -1,6 +1,16 @@
 window.onload = function () {
     "use strict";
 
+    var HINTS = [
+        'By holding the "c" button you shoot further.',
+        '"z" button turns on the shield.',
+        '"x" button allows you to jump.',
+        'Make sure you have a good speed before jumping',
+        'White color inside the tank means lack of energy for the shield.',
+        'As you level up the power of your bullets increase.',
+        'When you destroy a tank, you get all it\'s power.'
+    ];
+
     var conn;
     var myClientId;
     var tanks = {};
@@ -56,7 +66,12 @@ window.onload = function () {
     window.showLogin = function () {
         document.getElementById("overlay").style.display = "block";
         document.getElementById("login").style.display = "block";
+        var index = Math.round(Math.random()*HINTS.length);
+        console.log(index);
+        document.getElementById("randomHint").textContent = 
+            HINTS[index];
     }
+    showLogin();
 
     function Tank (x, y, hp, angle, shield, shieldPercent, clientId) {
         this.x = x;
