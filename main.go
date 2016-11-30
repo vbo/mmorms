@@ -214,7 +214,7 @@ func simulateWorld(
                     stars++
                     required *= 2
                 }
-                radius := int32(BULLET_EXPLOSION_RAD * (math.Sqrt(float64(stars)) + 1.0))
+                radius := int32(BULLET_EXPLOSION_RAD * math.Sqrt(float64(stars)/2.0 + 1.0))
                 broadcastDeath(bullet.id, bullet.x, bullet.y, radius, clients)
                 explodeAt(
                     coordToPixel(bullet.x),
