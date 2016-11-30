@@ -10,6 +10,7 @@ import (
   "time"
   "runtime"
   "fmt"
+  "image"
 
   "golang.org/x/image/bmp"
 )
@@ -54,7 +55,7 @@ const TANK_HEIGHT = 20
 const TANK_SHIELD_DURATION = 2000 * time.Millisecond
 const TANK_SHIELD_COOLDOWN = 5000 * time.Millisecond
 
-const DESTROYED_FRACTION_TO_SPACE = 0.25
+const DESTROYED_FRACTION_TO_SPACE = 0.15
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
@@ -86,6 +87,21 @@ const MIN_NUM_PLAYERS = 5
 
 const TARGET_TICK_TIME = 50 * time.Millisecond
 
+var MAP_FILES = []string{
+    "./public/islands_1.bmp",
+    "./public/islands_2.bmp",
+    "./public/bubbles.bmp",
+    "./public/platforms_1.bmp",
+    "./public/edges_1.bmp",
+    "./public/2bases.bmp",
+    "./public/slope_obstacles.bmp",
+    "./public/slope_1.bmp",
+    "./public/slopes_2.bmp",
+}
+
+
+var MAPS_LOADED = make([]image.Image, len(MAP_FILES))
+
 func NewTank() *Tank {
     return &Tank{
         x: float64(1 + rand.Intn(WIDTH - 1)),
@@ -95,6 +111,23 @@ func NewTank() *Tank {
 }
 
 func generateMapBitmap(mapBitmap []byte) {
+    mapi := rand.Intn(len(MAPS_LOADED)) 
+    log.Println("Loading map", MAP_FILES[mapi])
+    img := MAPS_LOADED[mapi]
+    p := 0
+    for y := 0; y < HEIGHT; y++ {
+        for x := 0; x < WIDTH; x++ {
+            r, _, _, _ := img.At(x, y).RGBA()
+            if r == 0 {
+                mapBitmap[p] = 1
+            } else {
+                mapBitmap[p] = 0
+            }
+            p++
+        }
+    }
+
+    /*
     for x := 0; x < WIDTH; x++ {
         groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 130.0) + 1.2) * 100
         for y := 0; y < HEIGHT; y++ {
@@ -105,6 +138,7 @@ func generateMapBitmap(mapBitmap []byte) {
             }
         }
     }
+    */
 }
 
 func simulateWorldInSpace(tanks map[uint32]*Tank,
@@ -257,18 +291,6 @@ func simulateWorld(
 }
 
 func gameLoop(net *Network) {
-    file, err := os.Open("./public/map.bmp")
-    if err != nil { panic(err) }
-    
-    img, err := bmp.Decode(file)
-    if err != nil { panic(err) }
-
-    bounds := img.Bounds()
-    if bounds.Max.X != WIDTH || bounds.Max.Y != HEIGHT {
-        panic("oops")
-    }
-
-    log.Println(bounds)
 
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
@@ -276,20 +298,6 @@ func gameLoop(net *Network) {
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
-
-    log.Println(img.At(512,0))
-    p := 0
-    for y := 0; y < HEIGHT; y++ {
-        for x := 0; x < WIDTH; x++ {
-            r, _, _, _ := img.At(x, y).RGBA()
-            if r == 0 {
-                mapBitmap[p] = 1
-            } else {
-                mapBitmap[p] = 0
-            }
-            p++
-        }
-    }
 
     lastPopulationCheck := time.Time{}
     botDeletionChan := make(chan bool, 2)
@@ -308,7 +316,7 @@ func gameLoop(net *Network) {
     // TODO(vbo): we need precomputed surface normals for:
     //  - grenades bouncing
     //  - tank slope orientation
-    //generateMapBitmap(mapBitmap)
+    generateMapBitmap(mapBitmap)
 
     startTime := time.Now()
     dtTotal := time.Duration(0)
@@ -857,6 +865,21 @@ func isGroundI(x int32, y int32, mapBitmap []byte) bool {
     return index < 0 || int(index) >= len(mapBitmap) || mapBitmap[index] == 1
 }
 
+func loadMap(path string) image.Image {
+    file, err := os.Open(path)
+    if err != nil { panic(err) }
+    
+    img, err := bmp.Decode(file)
+    if err != nil { panic(err) }
+
+    bounds := img.Bounds()
+    if bounds.Max.X != WIDTH || bounds.Max.Y != HEIGHT {
+        panic(fmt.Sprintf("invalid map file: %s"))
+    }
+    
+    return img
+}
+
 func main() {
     var addr = flag.String("addr", ":8080", "http service address")
     flag.Parse()
@@ -865,6 +888,9 @@ func main() {
     var net Network
     net.Init()
 
+    for i, mapfile := range MAP_FILES {
+        MAPS_LOADED[i] = loadMap(mapfile)
+    }
     go gameLoop(&net)
 
     serverErr := runServer(&net, *addr)
