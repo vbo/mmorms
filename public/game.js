@@ -88,6 +88,7 @@ window.onload = function () {
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
         this.body = new createjs.Bitmap("/tank6-body.png");
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
+        this.hpLabel.textAlign = "center";
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.shield = new createjs.Shape();
         this.shield.graphics.beginStroke("blue").beginFill("blue").drawCircle(0, 0, 35);
@@ -110,7 +111,6 @@ window.onload = function () {
         this.gun.rotation = angle;
         this.body.regX = 47;
         this.body.regY = 25;
-        this.hpLabel.regX = 10;
         this.hpLabel.regY = -35;
         this.shield.regY = -10;
         this.shieldBar.regY = 0;

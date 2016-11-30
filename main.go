@@ -87,7 +87,7 @@ func NewTank() *Tank {
     return &Tank{
         x: float64(1 + rand.Intn(WIDTH - 1)),
         y: 20,
-        hp: 100,
+        hp: 250,
     }
 }
 
@@ -145,6 +145,9 @@ func simulateWorld(
         for _, tank := range tanks {
             oldX := tank.x
             oldY := tank.y
+            // TODO(vbo): use separate point for ground collision,
+            // otherwise the logical center of the tank is too low
+            // and it feels weird.
             wasOnGround := isGroundF(tank.x, tank.y + 1.0, mapBitmap)
             if !wasOnGround || tank.vy < -2 {
                 tank.vy += GRAV_ACC * dt
@@ -163,6 +166,7 @@ func simulateWorld(
                     tank.jumping = false
                 }
             } else {
+                tank.vy = 0
                 tank.vx = float64(tank.moving) * TANK_SPEED
                 tank.x += tank.vx * dt
                 // hill sliding mechanics:
@@ -373,8 +377,6 @@ func gameLoop(net *Network) {
             for _,client := range clients {
                 client.outgoing <- newMapBitmapArchive
             }
-            // TODO(vbo): what if client connects during NEWMAP_TIMEOUT sleep?
-            // Should we send him newMap as well?
             go func() {
                 time.Sleep(NEWMAP_TIMEOUT)
                 startOfSpaceMode <-true
@@ -727,7 +729,6 @@ func explodeAt(cx int32,
                numGroundDestroyed *int) {
     // Destroy terrain
     // Use signed int math to make it possible to write equivalent js.
-    // TODO: dragons here
     sx := maxInt32(cx - r, 0)
     sy := maxInt32(cy - r, 0)
     ly := minInt32(cy + r, HEIGHT)
@@ -754,7 +755,24 @@ func explodeAt(cx int32,
         dmg := EXPLOSION_DMG + float64(r) - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
         if dmg > 0.1 {
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
-            tanks[tankID].hp -= realDmg
+            tank.hp -= realDmg
+
+            dxa := math.Abs(float64(dx))
+            dya := math.Abs(float64(dy))
+
+            dxs := 1.0
+            if dx != 0 { dxs = dxa / float64(dx) }
+            dys := 1.0
+            if dy != 0 { dys = dya / float64(dy) }
+
+            if dxa < 1 { dxa = 1 }
+            if dya < 1 { dya = 1 }
+
+            dvx := dxs * float64(r) * 2 / math.Pow(dxa, 0.25)
+            dvy := dys * float64(r) * 2 / math.Pow(dya, 0.25)
+
+            tank.vx += dvx
+            tank.vy -= dvy
             if (owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id) {
                 //owner.name = append(owner.name, []byte(string('★')))
                 owner.lifeFrags += 1
