@@ -87,7 +87,7 @@ func NewTank() *Tank {
     return &Tank{
         x: float64(1 + rand.Intn(WIDTH - 1)),
         y: 20,
-        hp: 250,
+        hp: 100,
     }
 }
 
@@ -436,8 +436,8 @@ func gameLoop(net *Network) {
                             }
                             aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
                             aimX /= aimLen; aimY /= aimLen
-                            vx := BULLET_SPEED * aimX * power
-                            vy := BULLET_SPEED * aimY * power
+                            vx := BULLET_SPEED * aimX * power + 0.7 * tank.vx
+                            vy := BULLET_SPEED * aimY * power + 0.7 * tank.vy
                             id := net.GetNewObjectId()
                             x := tank.x + TANK_GUN_LENGTH * aimX
                             y := tank.y - TANK_TOWER_HEIGHT * (1 - aimY)
@@ -748,32 +748,27 @@ func explodeAt(cx int32,
     }
     // Hit tanks
     for tankID, tank := range tanks {
-        if tank.shield { continue }
         dx := coordToPixel(tank.x) - cx
         dy := coordToPixel(tank.y) - cy
         ds := dx*dx + dy*dy
         dmg := EXPLOSION_DMG + float64(r) - EXPLOSION_DMG_FALLOFF * math.Sqrt(float64(ds))
         if dmg > 0.1 {
-            realDmg := uint32(math.Min(dmg, float64(tank.hp)))
-            tank.hp -= realDmg
-
             dxa := math.Abs(float64(dx))
             dya := math.Abs(float64(dy))
-
             dxs := 1.0
             if dx != 0 { dxs = dxa / float64(dx) }
             dys := 1.0
             if dy != 0 { dys = dya / float64(dy) }
-
             if dxa < 1 { dxa = 1 }
             if dya < 1 { dya = 1 }
-
-            dvx := dxs * float64(r) * 2 / math.Pow(dxa, 0.25)
-            dvy := dys * float64(r) * 2 / math.Pow(dya, 0.25)
-
+            dvx := dxs * float64(r) / math.Pow(dxa, 0.25)
+            dvy := dys * float64(r) / math.Pow(dya, 0.25)
             tank.vx += dvx
             tank.vy -= dvy
-            if (owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id) {
+            if tank.shield { continue }
+            realDmg := uint32(math.Min(dmg, float64(tank.hp)))
+            tank.hp -= realDmg
+            if owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id {
                 //owner.name = append(owner.name, []byte(string('★')))
                 owner.lifeFrags += 1
                 if clients[tankID] != nil {
