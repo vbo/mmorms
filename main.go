@@ -1,6 +1,7 @@
 package main
 
 import (
+  "os"
   "flag"
   "log"
   "encoding/binary"
@@ -9,6 +10,8 @@ import (
   "time"
   "runtime"
   "fmt"
+
+  "golang.org/x/image/bmp"
 )
 
 type Tank struct {
@@ -254,12 +257,39 @@ func simulateWorld(
 }
 
 func gameLoop(net *Network) {
+    file, err := os.Open("./public/map.bmp")
+    if err != nil { panic(err) }
+    
+    img, err := bmp.Decode(file)
+    if err != nil { panic(err) }
+
+    bounds := img.Bounds()
+    if bounds.Max.X != WIDTH || bounds.Max.Y != HEIGHT {
+        panic("oops")
+    }
+
+    log.Println(bounds)
+
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
+
+    log.Println(img.At(512,0))
+    p := 0
+    for y := 0; y < HEIGHT; y++ {
+        for x := 0; x < WIDTH; x++ {
+            r, _, _, _ := img.At(x, y).RGBA()
+            if r == 0 {
+                mapBitmap[p] = 1
+            } else {
+                mapBitmap[p] = 0
+            }
+            p++
+        }
+    }
 
     lastPopulationCheck := time.Time{}
     botDeletionChan := make(chan bool, 2)
@@ -278,7 +308,7 @@ func gameLoop(net *Network) {
     // TODO(vbo): we need precomputed surface normals for:
     //  - grenades bouncing
     //  - tank slope orientation
-    generateMapBitmap(mapBitmap)
+    //generateMapBitmap(mapBitmap)
 
     startTime := time.Now()
     dtTotal := time.Duration(0)
@@ -837,9 +867,9 @@ func main() {
 
     go gameLoop(&net)
 
-    err := runServer(&net, *addr)
-    if err != nil {
-        log.Fatal("Server: ", err)
+    serverErr := runServer(&net, *addr)
+    if serverErr != nil {
+        log.Fatal("Server: ", serverErr)
     }
 }
 
