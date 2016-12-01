@@ -90,7 +90,6 @@ const TARGET_TICK_TIME = 50 * time.Millisecond
 var MAP_FILES = []string{
     "./public/islands_1.bmp",
     "./public/islands_2.bmp",
-    "./public/bubbles.bmp",
     "./public/platforms_1.bmp",
     "./public/edges_1.bmp",
     "./public/2bases.bmp",
@@ -248,7 +247,10 @@ func simulateWorld(
                     tanks,
                     bullet.ownerId))  {
                 required := uint32(1)
-                frags := clients[bullet.ownerId].lifeFrags
+                frags := uint32(0)
+                if clients[bullet.ownerId] != nil {
+                    frags = clients[bullet.ownerId].lifeFrags
+                }
                 stars := uint32(0)
                 for frags > required {
                     frags -= required
