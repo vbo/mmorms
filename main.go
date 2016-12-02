@@ -55,7 +55,7 @@ const TANK_HEIGHT = 20
 const TANK_SHIELD_DURATION = 2000 * time.Millisecond
 const TANK_SHIELD_COOLDOWN = 5000 * time.Millisecond
 
-const DESTROYED_FRACTION_TO_SPACE = 0.15
+const DESTROYED_FRACTION_TO_SPACE = 0.3
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
@@ -98,7 +98,6 @@ var MAP_FILES = []string{
     "./public/slopes_2.bmp",
 }
 
-
 var MAPS_LOADED = make([]image.Image, len(MAP_FILES))
 
 func NewTank() *Tank {
@@ -109,35 +108,25 @@ func NewTank() *Tank {
     }
 }
 
-func generateMapBitmap(mapBitmap []byte) {
-    mapi := rand.Intn(len(MAPS_LOADED)) 
+func generateMapBitmap(mapBitmap []byte) int {
+    mapi := rand.Intn(len(MAPS_LOADED))
     log.Println("Loading map", MAP_FILES[mapi])
     img := MAPS_LOADED[mapi]
     p := 0
+    c := 0
     for y := 0; y < HEIGHT; y++ {
         for x := 0; x < WIDTH; x++ {
             r, _, _, _ := img.At(x, y).RGBA()
             if r == 0 {
                 mapBitmap[p] = 1
+                c++
             } else {
                 mapBitmap[p] = 0
             }
             p++
         }
     }
-
-    /*
-    for x := 0; x < WIDTH; x++ {
-        groundCurve := 200 + (float64(x) / 400.0 * math.Sin(float64(x) / 130.0) + 1.2) * 100
-        for y := 0; y < HEIGHT; y++ {
-            if (float64(y) < groundCurve) {
-                mapBitmap[x + y * WIDTH] = 0
-            } else {
-                mapBitmap[x + y * WIDTH] = 1
-            }
-        }
-    }
-    */
+    return c
 }
 
 func simulateWorldInSpace(tanks map[uint32]*Tank,
@@ -292,6 +281,8 @@ func simulateWorld(
     *bulletsIn = bullets
 }
 
+var newMapBitmapPixelCount = 0
+
 func gameLoop(net *Network) {
 
     clients := make(map[uint32]*Client)
@@ -318,7 +309,7 @@ func gameLoop(net *Network) {
     // TODO(vbo): we need precomputed surface normals for:
     //  - grenades bouncing
     //  - tank slope orientation
-    generateMapBitmap(mapBitmap)
+    mapBitmapPixelCount := generateMapBitmap(mapBitmap)
 
     startTime := time.Now()
     dtTotal := time.Duration(0)
@@ -559,6 +550,7 @@ func gameLoop(net *Network) {
                 newTanksPos = nil
                 spaceMode = false
                 copy(mapBitmapBuffer[1:], newMapBitmap[1:])
+                mapBitmapPixelCount = newMapBitmapPixelCount
                 newMapBitmap = nil
                 newMapBitmapArchive = nil
                 numGroundDestroyed = 0
@@ -578,7 +570,7 @@ func gameLoop(net *Network) {
         broadcastBullets(bullets, clients)
         broadcastLeaderboard(clients)
 
-        if newMapBitmap == nil && numGroundDestroyed > WIDTH * HEIGHT * DESTROYED_FRACTION_TO_SPACE {
+        if newMapBitmap == nil && numGroundDestroyed > int(float64(mapBitmapPixelCount) * DESTROYED_FRACTION_TO_SPACE) {
             log.Println("Time to restart...")
             numGroundDestroyed = 0
             go generateMapBitmapAsync(newMapChannel)
@@ -655,7 +647,7 @@ func archiveMap(mapBitmap []byte, result []byte) int {
 func generateMapBitmapAsync(result chan []byte) {
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
-    generateMapBitmap(mapBitmapBuffer[1:])
+    newMapBitmapPixelCount = generateMapBitmap(mapBitmapBuffer[1:])
     result <- mapBitmapBuffer
 }
 

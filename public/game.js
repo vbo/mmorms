@@ -486,7 +486,7 @@ window.onload = function () {
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
             inputState.changingAngle = (e.code == "ArrowUp" ? 1 : -1);
         }
-        if (e.key == "c") {
+        if (e.code == "KeyC") {
             if (inputState.power == 0) {
                 inputState.power = Date.now();
                 function updateGun() {
@@ -513,7 +513,7 @@ window.onload = function () {
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
             inputState.changingAngle = 0;
         }
-        if (e.key == "c") {
+        if (e.code == "KeyC") {
             inputState.power = getShootingPower(inputState);
             var a = me().gun.rotation * Math.PI / 180;
             var aimX = Math.cos(a) * 1000,
@@ -529,13 +529,13 @@ window.onload = function () {
             me().gun.filters = [];
             me().gun.cache(0, 0, 100, 100);
         }
-        if (e.key == "z") {
+        if (e.code == "KeyZ") {
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHIELD);
             conn.send(messageBuffer);
         }
-        if (e.key == "x") {
+        if (e.code == "KeyX") {
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_JUMP);
