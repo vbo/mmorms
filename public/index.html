@@ -64,6 +64,13 @@
                     style="overflow: hidden; margin: 0; border: 3px solid gray;">
                     Canvas is not supported?!!
                 </canvas>
+                <script>
+                var isFirefox = typeof InstallTrigger !== 'undefined';
+                var isChrome = !!window.chrome && !!window.chrome.webstore;
+                if (!isFirefox && !isChrome) {
+                    alert("Unfortunately the game doesn't support your web browser. Try Chrome or Firefox instead.");
+                }
+                </script>
                 <script>window.twttr = (function(d, s, id) {
                   var js, fjs = d.getElementsByTagName(s)[0],
                     t = window.twttr || {};

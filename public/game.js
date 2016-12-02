@@ -289,7 +289,7 @@ window.onload = function () {
                         render.stage.removeChild(bullets[id].shape);
                     }
                     bullets = {};
-                    function slideDownOldMap() {
+                    var slideDownOldMap = function () {
                         if (spaceMode) {
                             render.bgImage.alpha -= 0.1;
                             setTimeout(slideDownOldMap, 100);
@@ -403,7 +403,7 @@ window.onload = function () {
                             explosion.regX = 64;
                             explosion.regY = 64;
                             var maxScale = radius / 64;
-                            function animateExplosion() {
+                            var animateExplosion = function () {
                                 if (explosion.scaleX < maxScale) {
                                     explosion.scaleX += maxScale*0.4;
                                     explosion.scaleY += maxScale*0.4;
@@ -489,7 +489,7 @@ window.onload = function () {
         if (e.code == "KeyC") {
             if (inputState.power == 0) {
                 inputState.power = Date.now();
-                function updateGun() {
+                var updateGun = function () {
                     if (inputState.power == 0) {
                         return;
                     }
