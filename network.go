@@ -62,6 +62,7 @@ type Client struct {
     outgoing chan []byte
     name []byte
     observer bool
+    isBot bool
 }
 
 type Message struct {

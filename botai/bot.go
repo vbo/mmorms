@@ -19,6 +19,12 @@ type Bot struct {
     gunAngleTarget int32
 }
 
+var BOT_NAMES = []string{"Angel", "Xoxo", "Bass", "fish", "Bean", "acad", "Boo", "shelsp", "Bull", "racer :P", "caster", "Chieff", "legor", "Slayer89", "Crazy", "war72", "miate", "Delif", "ore007", "Diddy", "weatty", "Facepalm", "obama", "trump", "iwantyou", "wolfie", "lipslab", "madman", "артишок", "BunnyEater", "motowell", "agent006", "Mysioniz", "Netflow", "piercing", "autokran", "sampand", "rishar", "putin", "bobuk"}
+
+func getRndName() string {
+  return BOT_NAMES[rand.Intn(len(BOT_NAMES))]
+}
+
 func Start(input, output chan []byte, deletionChan chan bool) {
     bot := Bot {
         input: input,
@@ -37,7 +43,7 @@ func Start(input, output chan []byte, deletionChan chan bool) {
         }
     }
 
-    nickName := []byte(fmt.Sprintf(" Bot%d", bot.id))
+    nickName := []byte(fmt.Sprintf(" %s", getRndName()))
     bot.output <- nickName
 
     for {

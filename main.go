@@ -501,10 +501,12 @@ func gameLoop(net *Network) {
                         _, ok := tanks[client.id]
                         if !ok {
                             client.name = message.data[1:]
-                            if (len(client.name) == 0) {
+                            if len(client.name) == 0 {
                                 client.name = []byte(fmt.Sprintf("Tank%d", client.id))
                             }
-                            log.Printf("%s joined", string(client.name))
+                            if !client.isBot {
+                                log.Printf("%s joined", string(client.name))
+                            }
                             client.lifeFrags = 0
                             tanks[client.id] = NewTank()
                             if spaceMode {

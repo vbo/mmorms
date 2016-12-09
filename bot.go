@@ -13,6 +13,7 @@ func createBot(net *Network, deletionChan chan bool) {
         id: net.GetNewObjectId(),
         outgoing: make(chan []byte, MESSAGE_QUEUE_SIZE),
         observer: true,
+        isBot: true,
     }
     net.connect <- client
     log.Println("Bot client connecting...")
