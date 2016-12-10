@@ -57,6 +57,7 @@ window.onload = function () {
 
     render.init(WIDTH, HEIGHT);
 
+    window.playButtonClicked = 0;
     window.me = function() {
         return tanks[myClientId];
     }
@@ -69,6 +70,8 @@ window.onload = function () {
         document.getElementById("overlay").style.display = "block";
         document.getElementById("login").style.display = "block";
         if (typeof frags !== "undefined") {
+            document.getElementById("login").style.height = "256px";
+            document.getElementById("linkbar").style.marginTop = "40px";
             document.getElementById("finalScoreBlock").style.display = "block";
             document.getElementById("lifeScore").textContent = frags;
         }
@@ -658,8 +661,10 @@ window.onload = function () {
 };
 
 function onPlayButtonClicked () {
+    window.playButtonClicked++;
     var login = document.getElementById("loginInput").value;
     document.getElementById("overlay").style.display = "none";
     document.getElementById("login").style.display = "none";
+    ga('send', 'event', 'game', 'playButton', 'clicked', playButtonClicked);
     sendStart(login);
 }
