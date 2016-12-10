@@ -77,13 +77,16 @@ func Start(input, output chan []byte, deletionChan chan bool) {
                 msgData[0] = 0 // MSG_IN_MOVING
                 msgData[1] = bot.direction
                 msgData[2] = bot.changingAngle
+                if bot.changingAngle != 0 && rnd % 2 == 0 {
+                    bot.changingAngle = 0
+                }
             }
             if rand.Intn(100) % 10 == 0 {
                 direction := byte((rnd % 3) - 1)
                 bot.direction = direction
             }
-            if rand.Intn(100) % 8 == 0 {
-                bot.changingAngle = byte((rnd % 3) -1)
+            if rand.Intn(100) % 37 == 0 {
+                bot.changingAngle = byte((rnd % 3) -1) * 127
             }
             bot.output <- msgData
 

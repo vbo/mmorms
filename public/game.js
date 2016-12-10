@@ -48,6 +48,7 @@ window.onload = function () {
 
     var inputState = {
       moving: 0,
+      startChangingAngle: 0,
       changingAngle: 0,
       wasMoving: 0,
       wasChangingAngle: 0,
@@ -124,6 +125,7 @@ window.onload = function () {
         this.x = x;
         this.y = y;
         this.hp = hp;
+        // TODO: very rarely bugs happen here. No idea why =/
         if (INTERPOLATION_ENABLED && me() && this.clientId != me().clientId) {
             this.direction = direction;
         }
@@ -482,7 +484,11 @@ window.onload = function () {
             inputState.moving = newDir;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-            inputState.changingAngle = (e.code == "ArrowUp" ? 1 : -1);
+            var rotationDirection = (e.code == "ArrowUp" ? 1 : -1);
+            if (rotationDirection != inputState.changingAngle) {
+                inputState.startChangingAngle = performance.now();
+                inputState.changingAngle = rotationDirection; 
+            }
         }
         if (e.code == "KeyC") {
             if (inputState.power == 0) {
@@ -501,16 +507,28 @@ window.onload = function () {
         }
     });
 
+    function scaleTimeToByte(sign, startTime, delay) {
+        var delta = performance.now() - startTime;
+        if (delta > delay) {
+            delta = delay;
+        }
+        return sign * (delta / delay) * 127;
+    }
+
     window.addEventListener("keyup", function(e) {
         if (!me()) {
             return;
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-            inputState.wasMoving = inputState.moving;
-            inputState.moving = 0;
+            var keyUpDir = (e.code == "ArrowLeft") ? -1 : 1;
+            if (keyUpDir == inputState.moving) {
+                inputState.wasMoving = inputState.moving;
+                inputState.moving = 0;
+            }
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-            inputState.wasChangingAngle = inputState.changingAngle;
+            inputState.wasChangingAngle = scaleTimeToByte(inputState.changingAngle, inputState.startChangingAngle, 200);
+            inputState.startChangingAngle = 0;
             inputState.changingAngle = 0;
         }
         if (e.code == "KeyC") {
@@ -543,13 +561,18 @@ window.onload = function () {
           var dataView = new DataView(messageBuffer);
           dataView.setUint8(0, MSG_OUT_MOVING);
           dataView.setUint8(1, inputState.wasMoving);
+          if (inputState.wasChangingAngle == 0 &&
+              inputState.changingAngle != 0) {
+              inputState.wasChangingAngle = scaleTimeToByte(inputState.changingAngle, inputState.startChangingAngle, 200);
+          }
           dataView.setUint8(2, inputState.wasChangingAngle);
           if (conn.readyState === conn.OPEN) {
               conn.send(dataView);
           } else {
               //console.log("Still waiting for the conn to be established");
           }
-          inputState.wasChangingAngle = inputState.changingAngle;
+          inputState.startChangingAngle = performance.now();
+          inputState.wasChangingAngle = 0;
           inputState.wasMoving = inputState.moving;
     }, 200);
 

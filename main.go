@@ -227,7 +227,7 @@ func simulateWorld(
                 sinAngle := math.Sin(tank.gunAngle * math.Pi / 180)
                 if !(tank.changingAngle < 0 && sinAngle > 0 && math.Abs(cosAngle) < 0.92) &&
                    !(tank.changingAngle > 0 && sinAngle < 0 && math.Abs(cosAngle) < 0.09) {
-                    inc := dt * 48.0 * cosAngle / math.Abs(cosAngle)
+                    inc := dt * 0.4 * cosAngle / math.Abs(cosAngle)
                     tank.gunAngle -= float64(tank.changingAngle) * inc
                 }
             }
