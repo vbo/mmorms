@@ -49,6 +49,8 @@ window.onload = function () {
     var inputState = {
       moving: 0,
       changingAngle: 0,
+      wasMoving: 0,
+      wasChangingAngle: 0,
       power: 0,
     };
 
@@ -468,6 +470,13 @@ window.onload = function () {
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
             var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+            if (INTERPOLATION_ENABLED) {
+                var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+                if (newDir != me().direction) {
+                    me().gun.rotation = 180 - me().gun.rotation;
+                    me().direction = newDir;
+                }
+            }
             inputState.moving = newDir;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
@@ -495,16 +504,11 @@ window.onload = function () {
             return;
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-            if (INTERPOLATION_ENABLED) {
-                var newDir = (e.code == "ArrowLeft") ? -1 : 1;
-                if (newDir != me().direction) {
-                    me().gun.rotation = 180 - me().gun.rotation;
-                    me().direction = newDir;
-                }
-            }
+            inputState.wasMoving = inputState.moving;
             inputState.moving = 0;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
+            inputState.wasChangingAngle = inputState.changingAngle;
             inputState.changingAngle = 0;
         }
         if (e.code == "KeyC") {
@@ -536,13 +540,15 @@ window.onload = function () {
           var messageBuffer = new ArrayBuffer(6);
           var dataView = new DataView(messageBuffer);
           dataView.setUint8(0, MSG_OUT_MOVING);
-          dataView.setUint8(1, inputState.moving);
-          dataView.setUint8(2, inputState.changingAngle);
+          dataView.setUint8(1, inputState.wasMoving);
+          dataView.setUint8(2, inputState.wasChangingAngle);
           if (conn.readyState === conn.OPEN) {
               conn.send(dataView);
           } else {
               //console.log("Still waiting for the conn to be established");
           }
+          inputState.wasChangingAngle = inputState.changingAngle;
+          inputState.wasMoving = inputState.moving;
     }, 200);
 
     function explodeAt(mapBitmap, cx, cy, r) {

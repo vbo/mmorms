@@ -61,7 +61,7 @@ const DESTROYED_FRACTION_TO_SPACE = 0.3
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
-const POPULATION_CHECK_TIMEOUT = 60 * time.Second
+const POPULATION_CHECK_TIMEOUT = 9 * time.Second
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -335,21 +335,16 @@ func gameLoop(net *Network) {
 
     for {
         // adding bots
-        if len(tanks) < MIN_NUM_PLAYERS {
-            if lastPopulationCheck == (time.Time{}) {
-                lastPopulationCheck = time.Now()
-            } else {
-                if time.Now().Sub(lastPopulationCheck) > 1000 * time.Millisecond {
-                    go createBot(net, botDeletionChan)
-                    lastPopulationCheck = time.Time{}
-                }
-            }
-        } else {
-            lastPopulationCheck = time.Time{}
-            if len(tanks) > MIN_NUM_PLAYERS && len(botDeletionChan) == 0 {
-                log.Println("Deletion asked")
+        if lastPopulationCheck == (time.Time{}) {
+            lastPopulationCheck = time.Now()
+        }
+        if time.Now().Sub(lastPopulationCheck) > POPULATION_CHECK_TIMEOUT {
+            if len(tanks) < MIN_NUM_PLAYERS {
+                go createBot(net, botDeletionChan)
+            } else if len(tanks) > MIN_NUM_PLAYERS && len(botDeletionChan) == 0 {
                 botDeletionChan <-true
             }
+            lastPopulationCheck = time.Now()
         }
 
         // writing stats
