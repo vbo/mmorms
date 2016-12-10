@@ -64,9 +64,13 @@ window.onload = function () {
         conn.send(String.fromCharCode(MSG_OUT_START) + login);
     }
 
-    window.showLogin = function () {
+    window.showLogin = function (frags) {
         document.getElementById("overlay").style.display = "block";
         document.getElementById("login").style.display = "block";
+        if (typeof frags !== "undefined") {
+            document.getElementById("finalScoreBlock").style.display = "block";
+            document.getElementById("lifeScore").textContent = frags;
+        }
         var index = Math.round(Math.random()*HINTS.length);
         document.getElementById("randomHint").textContent = 
             HINTS[index];
@@ -116,6 +120,7 @@ window.onload = function () {
         this.shieldBar.regY = 0;
         // TODO: Text-align center 
         this.nickLabel.regY = 25;
+        this.lifeFrags = 0;
         render.stage.addChild(this.shape);
     }
 
@@ -135,6 +140,7 @@ window.onload = function () {
     }
 
     Tank.prototype.updateName = function (name, lifeFrags) {
+        this.lifeFrags = lifeFrags;
         if (lifeFrags > 0) {
             name += " ";
         }
@@ -425,7 +431,8 @@ window.onload = function () {
                     if (deadId == myClientId) {
                         inputState.direction = 1;
                         inputState.power = 0;
-                        showLogin();
+                        console.log(tanks[deadId].lifeFrags);
+                        showLogin(tanks[deadId].lifeFrags);
                     }
                     delete tanks[deadId];
                 } else if (bullets.hasOwnProperty(deadId)) {
