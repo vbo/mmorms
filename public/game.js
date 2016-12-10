@@ -41,7 +41,7 @@ window.onload = function () {
     var GROUP = Math.round(Math.random()*100) % 2;
 
     var SERVER_TICK_DELAY = 50;
-    var INTERPOLATION_ENABLED = false;
+    var INTERPOLATION_ENABLED = true;
 
     var mapSet = false;
     var spaceMode = false;
@@ -50,7 +50,6 @@ window.onload = function () {
       moving: 0,
       changingAngle: 0,
       power: 0,
-      direction: 1
     };
 
     render.init(WIDTH, HEIGHT);
@@ -73,13 +72,14 @@ window.onload = function () {
     }
     showLogin();
 
-    function Tank (x, y, hp, angle, shield, shieldPercent, clientId) {
+    function Tank (x, y, hp, angle, shield, shieldPercent, direction, clientId) {
         this.x = x;
         this.y = y;
         this.gunAngle = angle;
         this.clientId = clientId;
         this.maxHp = hp;
         this.hp = this.maxHp;
+        this.direction = direction;
         this.shape = new createjs.Container();
         this.shape.regX = 0;
         this.shape.regY = 25;
@@ -119,19 +119,18 @@ window.onload = function () {
         render.stage.addChild(this.shape);
     }
 
-    Tank.prototype.updateState = function(x, y, hp, angle, shield, shieldPercent) {
+    Tank.prototype.updateState = function(x, y, hp, angle, shield, shieldPercent, direction) {
         this.x = x;
         this.y = y;
         this.hp = hp;
+        this.direction = direction;
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
         this.shield.visible = !!shield;
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
-        if (!me() || me().clientId != this.clientId) {
-            this.gunAngle = angle;
-            this.gun.rotation = angle;
-        }
+        this.gunAngle = angle;
+        this.gun.rotation = angle;
     }
 
     Tank.prototype.updateName = function (name, lifeFrags) {
@@ -216,6 +215,7 @@ window.onload = function () {
         render.stage.addChild(line);
         leaderboardLines[i] = line;
     }
+
     function updateLeaderboard(entries) {
         entries.sort(LeaderboardEntry.compare);
         var numLeaders = 0;
@@ -308,16 +308,18 @@ window.onload = function () {
                 break;
             case MSG_IN_STATE:
                 var clientsNum = messageByteView[1];
+                var numItemsPerTank = 7;
                 var messageView = new Int32Array(evt.data.slice(2));
                 for (var i = 0; i < clientsNum; i++) {
-                    var clientId = messageView[i*6];
-                    var tankClientX = messageView[i*6 + 1];
-                    var tankClientY = messageView[i*6 + 2];
-                    var tankClientHp = messageView[i*6 + 3];
-                    var tankGunAngle = messageView[i*6 + 4];
-                    var shieldInfo = messageView[i*6 + 5];
+                    var clientId = messageView[i*numItemsPerTank];
+                    var tankClientX = messageView[i*numItemsPerTank + 1];
+                    var tankClientY = messageView[i*numItemsPerTank + 2];
+                    var tankClientHp = messageView[i*numItemsPerTank + 3];
+                    var tankGunAngle = messageView[i*numItemsPerTank + 4];
+                    var shieldInfo = messageView[i*numItemsPerTank + 5];
                     var shield = shieldInfo >> 24;
                     var shieldPercent = (shieldInfo & 0xFF)/255;
+                    var direction = messageView[i*numItemsPerTank + 6];
                     if (!tanks[clientId]) {
                         tanks[clientId] =
                             new Tank(tankClientX,
@@ -326,6 +328,7 @@ window.onload = function () {
                                 tankGunAngle,
                                 shield,
                                 shieldPercent,
+                                direction,
                                 clientId);
                     } else {
                         tanks[clientId].updateState(
@@ -334,7 +337,8 @@ window.onload = function () {
                             tankClientHp,
                             tankGunAngle,
                             shield,
-                            shieldPercent);
+                            shieldPercent,
+                            direction);
                     }
                 }
                 break;
@@ -423,7 +427,6 @@ window.onload = function () {
                 if (tanks.hasOwnProperty(deadId)) {
                     tanks[deadId].destroy();
                     if (deadId == myClientId) {
-                        inputState.direction = 1;
                         inputState.power = 0;
                         showLogin();
                     }
@@ -441,21 +444,9 @@ window.onload = function () {
         return;
     }
 
-    function changeAngle(arrowUp, rate) {
-        var cosAngle = Math.cos(me().gun.rotation * Math.PI / 180);
-        var sinAngle = Math.sin(me().gun.rotation * Math.PI / 180);
-        if (arrowUp < 0 && sinAngle > 0 && Math.abs(cosAngle) < 0.92) {
-            return; // gun is already too low
-        }
-        if (arrowUp > 0 && sinAngle < 0 && Math.abs(cosAngle) < 0.09) {
-            return; // gun is already too high
-        }
-        var inc = rate * cosAngle / Math.abs(cosAngle);
-        me().gun.rotation -= arrowUp * inc;
-    }
 
     function getShootingPower(inputState) {
-        var power = Math.floor((Date.now() - inputState.power) / 200);
+        var power = Math.floor((Date.now() - inputState.power) / 100);
         if (power <= 0) {
             power = 1;
         }
@@ -477,10 +468,6 @@ window.onload = function () {
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
             var newDir = (e.code == "ArrowLeft") ? -1 : 1;
-            if (inputState.direction != newDir) {
-                me().gun.rotation = 180 - me().gun.rotation;
-            }
-            inputState.direction = newDir;
             inputState.moving = newDir;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
@@ -508,22 +495,24 @@ window.onload = function () {
             return;
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-          inputState.moving = 0;
+            if (INTERPOLATION_ENABLED) {
+                var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+                if (newDir != me().direction) {
+                    me().gun.rotation = 180 - me().gun.rotation;
+                    me().direction = newDir;
+                }
+            }
+            inputState.moving = 0;
         }
         if (e.code == "ArrowUp" || e.code == "ArrowDown") {
             inputState.changingAngle = 0;
         }
         if (e.code == "KeyC") {
             inputState.power = getShootingPower(inputState);
-            var a = me().gun.rotation * Math.PI / 180;
-            var aimX = Math.cos(a) * 1000,
-                aimY = Math.sin(a) * 1000;
             var messageBuffer = new ArrayBuffer(10);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHOOTING);
-            dataView.setInt32(1, aimX, true /* little endian */);
-            dataView.setInt32(5, aimY, true /* little endian */);
-            dataView.setUint8(9, inputState.power);
+            dataView.setUint8(1, inputState.power);
             conn.send(messageBuffer);
             inputState.power = 0;
             me().gun.filters = [];
@@ -548,11 +537,7 @@ window.onload = function () {
           var dataView = new DataView(messageBuffer);
           dataView.setUint8(0, MSG_OUT_MOVING);
           dataView.setUint8(1, inputState.moving);
-          var rotation = 0;
-          if (me()) {
-              rotation = me().gun.rotation;
-          }
-          dataView.setInt32(2, rotation, true /* Little endian */);
+          dataView.setUint8(2, inputState.changingAngle);
           if (conn.readyState === conn.OPEN) {
               conn.send(dataView);
           } else {
@@ -600,9 +585,7 @@ window.onload = function () {
                 bullet.shape.y += (bullet.vy * deltaTime) | 0;
             }
         }
-        if (me() && inputState.changingAngle != 0) {
-            changeAngle(inputState.changingAngle, 0.04 * deltaTime);
-        }
+        //changeAngle(inputState.changingAngle, 0.04 * deltaTime);
         render.redraw();
         var endTime = performance.now();
         deltaTime = endTime - startTime;

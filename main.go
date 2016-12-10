@@ -20,7 +20,9 @@ type Tank struct {
     vx, vy float64
     moving int8
     jumping bool
-    gunAngle int32
+    gunAngle float64
+    changingAngle int8
+    direction int8
     hp uint32
     shield bool
     lastShotTime time.Time
@@ -59,7 +61,7 @@ const DESTROYED_FRACTION_TO_SPACE = 0.3
 
 const NEWMAP_TIMEOUT = 30000 * time.Millisecond
 const SPACE_DURATION = 1000 * time.Millisecond
-const POPULATION_CHECK_TIMEOUT = 60000 * time.Millisecond
+const POPULATION_CHECK_TIMEOUT = 60 * time.Second
 
 const WIDTH = 1260
 const HEIGHT = 620
@@ -104,6 +106,7 @@ func NewTank() *Tank {
     return &Tank{
         x: float64(1 + rand.Intn(WIDTH - 1)),
         y: 20,
+        direction: 1,
         hp: 100,
     }
 }
@@ -215,6 +218,17 @@ func simulateWorld(
                             tank.y = oldY + float64(i)
                         }
                     }
+                }
+            }
+
+            // calculating gun angle
+            if (tank.changingAngle != 0) {
+                cosAngle := math.Cos(tank.gunAngle * math.Pi / 180)
+                sinAngle := math.Sin(tank.gunAngle * math.Pi / 180)
+                if !(tank.changingAngle < 0 && sinAngle > 0 && math.Abs(cosAngle) < 0.92) &&
+                   !(tank.changingAngle > 0 && sinAngle < 0 && math.Abs(cosAngle) < 0.09) {
+                    inc := dt * 48.0 * cosAngle / math.Abs(cosAngle)
+                    tank.gunAngle -= float64(tank.changingAngle) * inc
                 }
             }
         }
@@ -446,25 +460,30 @@ func gameLoop(net *Network) {
                 client.ping = message.ping
                 switch message.data[0] {
                     case MSG_IN_MOVING:
-                        _, ok := tanks[client.id]
+                        tank, ok := tanks[client.id]
                         if ok {
-                            tanks[client.id].moving = int8(message.data[1])
-                            tanks[client.id].gunAngle =
-                                int32(binary.LittleEndian.Uint32(message.data[2:]))
+                            newDirection := int8(message.data[1])
+                            if newDirection != 0 && tank.direction != newDirection {
+                                tank.gunAngle = 180.0 - tank.gunAngle
+                                tank.direction = newDirection
+                            }
+                            tanks[client.id].moving = newDirection
+                            tanks[client.id].changingAngle = int8(message.data[2])
                         }
 
                     case MSG_IN_SHOOTING:
                         tank, ok := tanks[client.id]
                         if ok && !spaceMode && startTime.Sub(tank.lastShotTime) > TANK_SHOT_DELAY {
                             tank.lastShotTime = startTime
-                            aimX := float64(int32(binary.LittleEndian.Uint32(message.data[1:])))
-                            aimY := float64(int32(binary.LittleEndian.Uint32(message.data[5:])))
-                            power := float64(message.data[9])
+                            power := float64(message.data[1])
                             if power <= 0 {
                                 power = 1
                             } else if power > 10 {
                                 power = 10
                             }
+                            a := tank.gunAngle * math.Pi / 180
+                            aimX := math.Cos(a)
+                            aimY := math.Sin(a)
                             aimLen := math.Sqrt(aimX*aimX + aimY*aimY)
                             aimX /= aimLen; aimY /= aimLen
                             vx := BULLET_SPEED * aimX * power + 0.7 * tank.vx
@@ -695,7 +714,7 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTim
     //    the data pointer with the actual curTick at the send time.
     //  - A different solution is to preallocate a pool
     //    of reference counted arenas.
-    stateMessageBuffer := make([]byte, 2 + len(tanks) * 24)
+    stateMessageBuffer := make([]byte, 2 + len(tanks) * 28)
     stateMessageBuffer[0] = MSG_OUT_STATE
     stateMessageBuffer[1] = byte(len(tanks))
     message := stateMessageBuffer[2:]
@@ -715,7 +734,8 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTim
             shieldInfo = 0x00000000 + uint32(percent*255)
         }
         binary.LittleEndian.PutUint32(message[20:], shieldInfo)
-        message = message[24:]
+        binary.LittleEndian.PutUint32(message[24:], uint32(tank.direction))
+        message = message[28:]
     }
     for _, client := range clients {
         client.outgoing <- stateMessageBuffer[0 : len(stateMessageBuffer)]
@@ -772,7 +792,7 @@ func explodeAt(cx int32,
         for x := sx; x < lx; x++ {
             ds := (y-cy)*(y-cy) + (x-cx)*(x-cx)
             if ds < rs {
-                index := uint32(x) + uint32(y) * WIDTH;
+                index := uint32(x) + uint32(y) * WIDTH
                 if isGroundI(x, y, mapBitmap) {
                     *numGroundDestroyed++
                 }

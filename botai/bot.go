@@ -4,7 +4,6 @@ import (
     "time"
     "encoding/binary"
     "math/rand"
-    "math"
     "fmt"
     "log"
 )
@@ -15,8 +14,7 @@ type Bot struct {
     output chan []byte
     deletion chan bool
     direction byte
-    gunAngle int32
-    gunAngleTarget int32
+    changingAngle byte
 }
 
 var BOT_NAMES = []string{"Angel", "Xoxo", "Bass", "fish", "Bean", "acad", "Boo", "shelsp", "Bull", "racer :P", "caster", "Chieff", "legor", "Slayer89", "Crazy", "war72", "miate", "Delif", "ore007", "Diddy", "weatty", "Facepalm", "obama", "trump", "iwantyou", "wolfie", "lipslab", "madman", "артишок", "BunnyEater", "motowell", "agent006", "Mysioniz", "Netflow", "piercing", "autokran", "sampand", "rishar", "putin", "bobuk"}
@@ -31,8 +29,7 @@ func Start(input, output chan []byte, deletionChan chan bool) {
         output: output,
         deletion: deletionChan,
         direction: 1,
-        gunAngle: 0,
-        gunAngleTarget: 0,
+        changingAngle: 0,
     }
 
     for {
@@ -51,11 +48,9 @@ func Start(input, output chan []byte, deletionChan chan bool) {
         case message := <-bot.input:
             switch message[0] {
             case 4: // MSG_OUT_DEATH
-                deadId := binary.LittleEndian.Uint32(message[1:]) 
+                deadId := binary.LittleEndian.Uint32(message[1:])
                 if (deadId == bot.id) {
-                    bot.gunAngleTarget = 0
                     bot.direction = 1
-                    bot.gunAngle = 0
                     select {
                     case <- bot.deletion:
                         log.Println("Deleting myself as asked")
@@ -73,31 +68,19 @@ func Start(input, output chan []byte, deletionChan chan bool) {
             if rnd % 20 != 0 {
                 msgData = make([]byte, 6)
                 msgData[0] = 0 // MSG_IN_MOVING
-                msgData [1] = bot.direction
-                gunAngleDiff := float64(bot.gunAngleTarget - bot.gunAngle)
-                if (gunAngleDiff != 0) {
-                    bot.gunAngle += int32(gunAngleDiff / math.Abs(gunAngleDiff))
-                }
-                binary.LittleEndian.PutUint32(msgData[2:], uint32(bot.gunAngle))
+                msgData[1] = bot.direction
+                msgData[2] = bot.changingAngle
             } else {
                 msgData = make([]byte, 10)
                 msgData[0] = 1 //MSG_IN_SHOOTING
-                x := 128 * math.Cos(float64(bot.gunAngle) * math.Pi / 180)
-                y := 128 * math.Sin(float64(bot.gunAngle) * math.Pi / 180)
-                binary.LittleEndian.PutUint32(msgData[1:], uint32(x))
-                binary.LittleEndian.PutUint32(msgData[5:], uint32(y))
-                msgData[9] = uint8(rand.Intn(5) + 5)
+                msgData[1] = uint8(rand.Intn(5) + 5)
             }
             if rand.Intn(100) % 10 == 0 {
                 direction := byte((rnd % 3) - 1)
-                if direction != bot.direction && direction != 0 {
-                    bot.gunAngle = 180 - bot.gunAngle
-                    bot.gunAngleTarget = 180 - bot.gunAngleTarget
-                }
                 bot.direction = direction
             }
             if rand.Intn(100) % 8 == 0 {
-                bot.gunAngleTarget = int32(rand.Intn(180)) - 90
+                bot.changingAngle = byte((rnd % 3) -1)
             }
             bot.output <- msgData
 
@@ -105,7 +88,6 @@ func Start(input, output chan []byte, deletionChan chan bool) {
             msgData = make([]byte, 1)
             msgData[0] = 2 //MSG_IN_SHIELD
             bot.output <- msgData
-
             time.Sleep(200 * time.Millisecond)
         }
     }
