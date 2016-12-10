@@ -214,26 +214,42 @@ window.onload = function () {
         return y.id - x.id;
     }
 
-    var leaderboardLines = [];
-    for (var i = 0; i < MAX_LEADERS; i++) {
+    var leaderBoardTitle = new createjs.Text("LEADERBOARD", "12px Roboto", "Black");
+    leaderBoardTitle.y = 5;
+    leaderBoardTitle.x = 45;
+    render.stage.addChild(leaderBoardTitle);
+    var leaderboardNickLines = [];
+    var leaderboardFragLines = [];
+    for (var i = 0; i <= MAX_LEADERS; i++) {
         var line = new createjs.Text("", "12px Roboto", "Black");
-        line.y = 5 + i * 14;
+        var yOffset = 25 + i*14;
+        var nickWidth = 130;
+        line.y = yOffset;
         line.x = 10;
+        line.lineWidth = nickWidth;
         render.stage.addChild(line);
-        leaderboardLines[i] = line;
+        leaderboardNickLines[i] = line;
+
+        line = new createjs.Text("", "12px Roboto", "Black");
+        line.y = yOffset;
+        line.x = nickWidth + 10;
+        render.stage.addChild(line);
+        leaderboardFragLines[i] = line;
     }
     function updateLeaderboard(entries) {
         entries.sort(LeaderboardEntry.compare);
         var numLeaders = 0;
-        for (var i = 0; i < Math.min(entries.length, MAX_LEADERS); i++) {
+        for (var i = 0; i <= Math.min(entries.length, MAX_LEADERS); i++) {
             var leader = entries[i];
-            if (leader.frags != 0) {
+            if (leader && leader.frags != 0) {
                 numLeaders++;
-                leaderboardLines[i].text = (i + 1) + ". " + leader.name + "\t" + leader.frags;
+                leaderboardNickLines[i].text = "#" + i + "    " + leader.name.substring(0,12);
+                leaderboardFragLines[i].text = leader.frags;
             }
         }
-        for (var i = numLeaders; i < MAX_LEADERS; i++) {
-            leaderboardLines[i].text = "";
+        for (var i = numLeaders + 1; i < MAX_LEADERS; i++) {
+            leaderboardNickLines[i].text = "";
+            leaderboardFragLines[i].text = "";
         }
     }
 
