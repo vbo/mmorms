@@ -65,15 +65,18 @@ func Start(input, output chan []byte, deletionChan chan bool) {
         default:
             var msgData []byte
             rnd := rand.Intn(100)
-            if rnd % 20 != 0 {
+            if rnd % 15 == 0 {
+                msgData = make([]byte, 10)
+                msgData[0] = 1 //MSG_IN_SHOOTING
+                msgData[1] = uint8(rand.Intn(5) + 5)
+            } else if rnd % 17 == 0 {
+                msgData = make([]byte, 1)
+                msgData[0] = 3 //MSG_IN_JUMP
+            } else {
                 msgData = make([]byte, 6)
                 msgData[0] = 0 // MSG_IN_MOVING
                 msgData[1] = bot.direction
                 msgData[2] = bot.changingAngle
-            } else {
-                msgData = make([]byte, 10)
-                msgData[0] = 1 //MSG_IN_SHOOTING
-                msgData[1] = uint8(rand.Intn(5) + 5)
             }
             if rand.Intn(100) % 10 == 0 {
                 direction := byte((rnd % 3) - 1)

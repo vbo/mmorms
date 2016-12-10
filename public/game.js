@@ -77,7 +77,6 @@ window.onload = function () {
     function Tank (x, y, hp, angle, shield, shieldPercent, direction, clientId) {
         this.x = x;
         this.y = y;
-        this.gunAngle = angle;
         this.clientId = clientId;
         this.maxHp = hp;
         this.hp = this.maxHp;
@@ -125,14 +124,17 @@ window.onload = function () {
         this.x = x;
         this.y = y;
         this.hp = hp;
-        this.direction = direction;
+        if (INTERPOLATION_ENABLED && me() && this.clientId != me().clientId) {
+            this.direction = direction;
+        }
+        if (!INTERPOLATION_ENABLED || ! me() || this.clientId != me().clientId || direction == this.direction) {
+            this.gun.rotation = angle;
+        }
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
         this.shield.visible = !!shield;
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
-        this.gunAngle = angle;
-        this.gun.rotation = angle;
     }
 
     Tank.prototype.updateName = function (name, lifeFrags) {
