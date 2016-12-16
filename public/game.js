@@ -45,6 +45,8 @@ window.onload = function () {
 
     var mapSet = false;
     var spaceMode = false;
+    var firstMessageServerTime = -1;
+    var firstMessageClientTime = -1;
 
     var inputState = {
       moving: 0,
@@ -294,14 +296,20 @@ window.onload = function () {
             var messageByteView = new Uint8Array(evt.data);
             // TODO: Replace with DataView
             var type = dataView.getUint8(0);
-            var time = 0;
+            var msgServerTime = 0;
+            var msgClientTime = 0;
             var headerSize = 1;
             if (type != MSG_IN_MAP)  {
                 headerSize = 9;
                 if (dataView.byteLength < 2) {
                     console.log(type);
                 }
-                time = dataView.getFloat64(1, true);
+                msgServerTime = dataView.getFloat64(1, true);
+                if (firstMessageServerTime < 0) {
+                    firstMessageServerTime = msgServerTime;
+                    firstMessageClientTime = performance.now();
+                }
+                msgClientTime = firstMessageClientTime + (msgServerTime - firstMessageServerTime);
             }
             switch (type) {
             case MSG_IN_MAP: // map update
