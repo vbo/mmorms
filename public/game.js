@@ -68,6 +68,8 @@ window.onload = function () {
         document.getElementById("overlay").style.display = "block";
         document.getElementById("login").style.display = "block";
         if (typeof frags !== "undefined") {
+            document.getElementById("login").style.height = "256px";
+            document.getElementById("linkbar").style.marginTop = "40px";
             document.getElementById("finalScoreBlock").style.display = "block";
             document.getElementById("lifeScore").textContent = frags;
         }
