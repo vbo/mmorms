@@ -403,7 +403,7 @@ window.onload = function () {
                 updateLeaderboard(leaderboard);
                 break;
             case MSG_IN_GREETING:
-                myClientId = dataView.getUint32(headerSize);
+                myClientId = dataView.getUint32(headerSize, true);
                 console.log("I am " + myClientId);
                 break;
             case MSG_IN_BULLET_STATE:
@@ -508,7 +508,6 @@ window.onload = function () {
             return;
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-            console.log("deeed");
             var newDir = (e.code == "ArrowLeft") ? -1 : 1;
             if (INTERPOLATION_ENABLED) {
                 var newDir = (e.code == "ArrowLeft") ? -1 : 1;
