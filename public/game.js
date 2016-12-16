@@ -293,10 +293,20 @@ window.onload = function () {
             var dataView = new DataView(evt.data);
             var messageByteView = new Uint8Array(evt.data);
             // TODO: Replace with DataView
-            switch (dataView.getUint8(0)) {
+            var type = dataView.getUint8(0);
+            var time = 0;
+            var headerSize = 1;
+            if (type != MSG_IN_MAP)  {
+                headerSize = 9;
+                if (dataView.byteLength < 2) {
+                    console.log(type);
+                }
+                time = dataView.getFloat64(1, true);
+            }
+            switch (type) {
             case MSG_IN_MAP: // map update
                 if (mapSet) {
-                    newMapBitmap = new DataView(evt.data, 1); 
+                    newMapBitmap = new DataView(evt.data, headerSize); 
                     newMapBitmap = dearchive(newMapBitmap);
                     render.updateMapCanvasBack(newMapBitmap);
                     var newMapTimeStart = performance.now();
@@ -307,13 +317,13 @@ window.onload = function () {
                     }, 50);
                 } else {
                     mapSet = true;
-                    mapBitmap = new DataView(evt.data, 1); 
+                    mapBitmap = new DataView(evt.data, headerSize); 
                     mapBitmap = dearchive(mapBitmap);
                     render.updateMapCanvas(mapBitmap);
                 }
                 break;
             case MSG_IN_MAP_CHANGE:
-                if (messageByteView[1] == 1) {
+                if (messageByteView[headerSize] == 1) {
                     spaceMode = true;
                     for (var id in bullets) {
                         render.stage.removeChild(bullets[id].shape);
@@ -337,9 +347,9 @@ window.onload = function () {
                 }
                 break;
             case MSG_IN_STATE:
-                var clientsNum = messageByteView[1];
+                var clientsNum = messageByteView[headerSize];
                 var numItemsPerTank = 7;
-                var messageView = new Int32Array(evt.data.slice(2));
+                var messageView = new Int32Array(evt.data.slice(headerSize + 1));
                 for (var i = 0; i < clientsNum; i++) {
                     var clientId = messageView[i*numItemsPerTank];
                     var tankClientX = messageView[i*numItemsPerTank + 1];
@@ -373,9 +383,9 @@ window.onload = function () {
                 }
                 break;
             case MSG_IN_LEADERBOARD:
-                var clientsNum = dataView.getUint32(1, true);
+                var clientsNum = dataView.getUint32(headerSize, true);
                 var leaderboard = new Array(clientsNum);
-                var p = 5;
+                var p = headerSize + 4;
                 for (var i = 0; i < clientsNum; i++) {
                     var id = dataView.getUint32(p, true);
                     var sessionFrags = dataView.getUint32(p + 4, true);
@@ -393,13 +403,13 @@ window.onload = function () {
                 updateLeaderboard(leaderboard);
                 break;
             case MSG_IN_GREETING:
-                myClientId = (new Int32Array(evt.data.slice(1)))[0];
+                myClientId = dataView.getUint32(headerSize);
                 console.log("I am " + myClientId);
                 break;
             case MSG_IN_BULLET_STATE:
                 if (!spaceMode) {
-                    var bulletsNum = dataView.getUint32(1, true);
-                    var headerOffset = 5;
+                    var bulletsNum = dataView.getUint32(headerSize, true);
+                    var headerOffset = headerSize + 4;
                     for (var i = 0; i < bulletsNum; i++) {
                         var id = dataView.getUint32(headerOffset + i*12, true);
                         var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
@@ -414,7 +424,7 @@ window.onload = function () {
                 }
                 break;
             case MSG_IN_DEATH:
-                var messageData = new Int32Array(evt.data.slice(1));
+                var messageData = new Int32Array(evt.data.slice(headerSize));
                 var deadId = messageData[0],
                     x = messageData[1],
                     y = messageData[2],
@@ -498,6 +508,7 @@ window.onload = function () {
             return;
         }
         if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
+            console.log("deeed");
             var newDir = (e.code == "ArrowLeft") ? -1 : 1;
             if (INTERPOLATION_ENABLED) {
                 var newDir = (e.code == "ArrowLeft") ? -1 : 1;

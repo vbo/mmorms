@@ -76,6 +76,7 @@ const (
     MSG_OUT_MAP_CHANGE = 6
     MSG_OUT_PING = 80
 )
+const MSG_HEADER_SIZE = 1 + 8
 
 const (
     MSG_IN_MOVING = 0
@@ -261,7 +262,7 @@ func simulateWorld(
                     required *= 2
                 }
                 radius := int32(BULLET_EXPLOSION_RAD * math.Sqrt(float64(stars)/2.0 + 1.0))
-                broadcastDeath(bullet.id, bullet.x, bullet.y, radius, clients)
+                broadcastDeath(bullet.id, bullet.x, bullet.y, radius, clients, startTime)
                 explodeAt(
                     coordToPixel(bullet.x),
                     coordToPixel(bullet.y),
@@ -281,7 +282,7 @@ func simulateWorld(
         for tankID, tank := range tanks {
             // Explode dead tanks.
             if tank.hp == 0 {
-                broadcastDeath(tankID, tank.x, tank.y, 0, clients)
+                broadcastDeath(tankID, tank.x, tank.y, 0, clients, startTime)
                 delete(tanks, tankID)
             }
             // Drop shields
@@ -376,11 +377,10 @@ func gameLoop(net *Network) {
         select {
         case client := <-net.connect:
             clients[client.id] = client
-            var greetingMsg [5]byte
-            greetingMsg[0] = MSG_OUT_GREETING
-            binary.LittleEndian.PutUint32(greetingMsg[1:], client.id)
+            greetingMsg := createMsg(MSG_OUT_GREETING, startTime, 4)
+            binary.LittleEndian.PutUint32(greetingMsg[MSG_HEADER_SIZE:], client.id)
             //log.Printf("Client %d connected.", client.id)
-            client.outgoing <- greetingMsg[0:]
+            client.outgoing <- greetingMsg
             client.outgoing <- mapBitmapBufferCopy
             if newMapBitmap != nil {
                 client.outgoing <- newMapBitmapArchive
@@ -393,7 +393,7 @@ func gameLoop(net *Network) {
         case client := <-net.disconnect:
             tank, ok := tanks[client.id]
             if ok {
-                broadcastDeath(client.id, tank.x, tank.y, 0, clients)
+                broadcastDeath(client.id, tank.x, tank.y, 0, clients, startTime)
                 delete(tanks, client.id)
             }
             delete(clients, client.id)
@@ -424,9 +424,8 @@ func gameLoop(net *Network) {
 
         case _ = <-startOfSpaceMode:
             log.Println("Entering the space mode...")
-            mapChangeMsg := make([]byte, 2)
-            mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
-            mapChangeMsg[1] = 1
+            mapChangeMsg := createMsg(MSG_OUT_MAP_CHANGE, startTime, 1)
+            mapChangeMsg[MSG_HEADER_SIZE] = 1
             for _,client := range clients {
                 client.outgoing <- mapChangeMsg
             }
@@ -583,8 +582,8 @@ func gameLoop(net *Network) {
 
         // Broadcast world snapshot
         broadcastTanks(tanks, clients, startTime)
-        broadcastBullets(bullets, clients)
-        broadcastLeaderboard(clients)
+        broadcastBullets(bullets, clients, startTime)
+        broadcastLeaderboard(clients, startTime)
 
         if newMapBitmap == nil && numGroundDestroyed > int(float64(mapBitmapPixelCount) * DESTROYED_FRACTION_TO_SPACE) {
             log.Println("Time to restart...")
@@ -667,7 +666,7 @@ func generateMapBitmapAsync(result chan []byte) {
     result <- mapBitmapBuffer
 }
 
-func broadcastLeaderboard(clients map[uint32]*Client) {
+func broadcastLeaderboard(clients map[uint32]*Client, startTime time.Time) {
     namesLen := 0
     namedClientsCount := 0
     for _, client := range clients {
@@ -677,11 +676,11 @@ func broadcastLeaderboard(clients map[uint32]*Client) {
             namedClientsCount++
         }
     }
-    messageLen := 5 + (13 * namedClientsCount) + namesLen
-    messageBuffer := make([]byte, messageLen)
-    messageBuffer[0] = MSG_OUT_LEADERBOARD
-    binary.LittleEndian.PutUint32(messageBuffer[1:], uint32(namedClientsCount))
-    message := messageBuffer[5:]
+    messageLen := 4 + (13 * namedClientsCount) + namesLen
+    messageBuffer := createMsg(MSG_OUT_LEADERBOARD, startTime, messageLen)
+    // TODO (lenny): max 255 players?
+    binary.LittleEndian.PutUint32(messageBuffer[MSG_HEADER_SIZE:], uint32(namedClientsCount))
+    message := messageBuffer[MSG_HEADER_SIZE + 4:]
     for _, client := range clients {
         nameLen := byte(len(client.name))
         if nameLen == 0 { continue }
@@ -693,7 +692,7 @@ func broadcastLeaderboard(clients map[uint32]*Client) {
         message = message[13 + nameLen:]
     }
     for _, client := range clients {
-        client.outgoing <- messageBuffer[0 : messageLen]
+        client.outgoing <- messageBuffer
     }
 }
 
@@ -709,10 +708,9 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTim
     //    the data pointer with the actual curTick at the send time.
     //  - A different solution is to preallocate a pool
     //    of reference counted arenas.
-    stateMessageBuffer := make([]byte, 2 + len(tanks) * 28)
-    stateMessageBuffer[0] = MSG_OUT_STATE
-    stateMessageBuffer[1] = byte(len(tanks))
-    message := stateMessageBuffer[2:]
+    stateMessageBuffer := createMsg(MSG_OUT_STATE, startTime, 1 + len(tanks) * 28)
+    stateMessageBuffer[MSG_HEADER_SIZE] = byte(len(tanks))
+    message := stateMessageBuffer[MSG_HEADER_SIZE + 1:]
     for tankId, tank := range tanks {
         binary.LittleEndian.PutUint32(message[0:], tankId)
         binary.LittleEndian.PutUint32(message[4:], uint32(tank.x))
@@ -733,15 +731,22 @@ func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTim
         message = message[28:]
     }
     for _, client := range clients {
-        client.outgoing <- stateMessageBuffer[0 : len(stateMessageBuffer)]
+        client.outgoing <- stateMessageBuffer
     }
 }
 
-func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
-    var bulletsMessageBuffer = make([]byte, len(bullets) * 12 + 5)
-    bulletsMessageBuffer[0] = MSG_OUT_BULLET_STATE
-    binary.LittleEndian.PutUint32(bulletsMessageBuffer[1:], uint32(len(bullets)))
-    message := bulletsMessageBuffer[5:]
+func createMsg(msgType byte, time time.Time, size int) []byte {
+    result := make([]byte, size + MSG_HEADER_SIZE)
+    result[0] = msgType
+    timeInFloat := float64(time.UnixNano() / 1000000)
+    binary.LittleEndian.PutUint64(result[1:], math.Float64bits(timeInFloat))
+    return result
+}
+
+func broadcastBullets(bullets []Bullet, clients map[uint32]*Client, startTime time.Time) {
+    bulletsMessageBuffer := createMsg(MSG_OUT_BULLET_STATE, startTime, len(bullets) * 12 + 4)
+    binary.LittleEndian.PutUint32(bulletsMessageBuffer[MSG_HEADER_SIZE:], uint32(len(bullets)))
+    message := bulletsMessageBuffer[MSG_HEADER_SIZE + 4:]
     for _, bullet := range bullets {
         binary.LittleEndian.PutUint32(message[0:], bullet.id)
         binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
@@ -754,18 +759,16 @@ func broadcastBullets(bullets []Bullet, clients map[uint32]*Client) {
 }
 
 func broadcastDeath(id uint32, x float64, y float64, radius int32,
-                    clients map[uint32]*Client) {
-    var buffer [17]byte
-    buffer[0] = MSG_OUT_DEATH
-    message := buffer[1:]
+                    clients map[uint32]*Client, startTime time.Time) {
+    buffer := createMsg(MSG_OUT_DEATH, startTime, 16)
+    message := buffer[MSG_HEADER_SIZE:]
     binary.LittleEndian.PutUint32(message[0:], id)
     binary.LittleEndian.PutUint32(message[4:], uint32(x))
     binary.LittleEndian.PutUint32(message[8:], uint32(y))
     binary.LittleEndian.PutUint32(message[12:], uint32(radius))
     for clientId, _ := range clients {
-        clients[clientId].outgoing <- buffer[0:]
+        clients[clientId].outgoing <- buffer
     }
-    //log.Printf("Object %d died bravely", id)
 }
 
 func explodeAt(cx int32,
