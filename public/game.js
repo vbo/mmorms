@@ -240,18 +240,16 @@ window.onload = function () {
     }
     function updateLeaderboard(entries) {
         entries.sort(LeaderboardEntry.compare);
-        var numLeaders = 0;
+        for (var i = 0; i < MAX_LEADERS; i++) {
+            leaderboardNickLines[i].text = "";
+            leaderboardFragLines[i].text = "";
+        }
         for (var i = 0; i <= Math.min(entries.length, MAX_LEADERS); i++) {
             var leader = entries[i];
             if (leader && leader.frags != 0) {
-                numLeaders++;
                 leaderboardNickLines[i].text = "#" + i + "    " + leader.name.substring(0,12);
                 leaderboardFragLines[i].text = leader.frags;
             }
-        }
-        for (var i = numLeaders + 1; i < MAX_LEADERS; i++) {
-            leaderboardNickLines[i].text = "";
-            leaderboardFragLines[i].text = "";
         }
     }
 
