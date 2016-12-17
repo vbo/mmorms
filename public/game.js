@@ -24,6 +24,7 @@ window.onload = function () {
     var HEIGHT = 620;
 
     var NEWMAP_TIMEOUT = 30000;
+    var GRAV_ACC = 30; 
 
     var MSG_IN_MAP = 0
     var MSG_IN_STATE = 1
@@ -32,6 +33,7 @@ window.onload = function () {
     var MSG_IN_DEATH = 4
     var MSG_IN_LEADERBOARD = 5
     var MSG_IN_MAP_CHANGE = 6
+    var MSG_IN_BULLET_CREATE = 7
 
     var MSG_OUT_MOVING = 0
     var MSG_OUT_SHOOTING = 1
@@ -171,44 +173,27 @@ window.onload = function () {
         render.stage.removeChild(this.hpLabel);
     }
 
-    function Bullet (x, y, id) {
-        this.x = x;
-        this.y = y;
-        this.vx = 0;
-        this.vy = 0;
+    function Bullet (id, ownerId, x, y, vx, vy, creationTime) {
+        console.log("New bullet @ ", x, y);
+        this.x0 = x;
+        this.y0 = y;
+        this.vx = vx;
+        this.vy = vy;
         this.id = id;
-        this.lastTickTime = performance.now();
+        this.ownerId = ownerId;
+        this.creationTime = creationTime;
         this.shape = new createjs.Shape();
         this.shape.graphics.beginFill("Red").drawCircle(0, 0, 5);
-        if (!INTERPOLATION_ENABLED) {
-            this.shape.x = this.x;
-            this.shape.y = this.y;
-        } else {
-            this.shape.x = -100;
-            this.shape.y = -100;
-            //this.shape.x = this.x;
-            //this.shape.y = this.y;
-            this.lastTickTime = performance.now();
-        }
+        this.shape.x = this.x0;
+        this.shape.y = this.y0;
         render.stage.addChild(this.shape);
     }
-
-    Bullet.prototype.updateState = function(x, y) {
-        if (!INTERPOLATION_ENABLED) {
-            this.shape.x = x;
-            this.shape.y = y;
-        } else if (this.shape.x < -99) {
-            this.shape.x = this.x;
-            this.shape.y = this.y;    
-        }
-        this.x = x;
-        this.y = y;
-        var curTime = performance.now();
-        if (INTERPOLATION_ENABLED) {
-            this.vx = (this.x - this.shape.x) / (curTime - this.lastTickTime); 
-            this.vy = (this.y - this.shape.y) / (curTime - this.lastTickTime);
-        }
-        this.lastTickTime = curTime;
+    
+    Bullet.prototype.updateState = function(t) {
+        var dt = (t - this.creationTime) / 1000;
+        this.shape.x = this.x0 + this.vx * dt;
+        this.shape.y = this.y0 + this.vy * dt + GRAV_ACC * dt * dt / 2;
+        console.log(dt, this.shape.x, this.shape.y);
     }
 
     var MAX_LEADERS = 10;
@@ -414,7 +399,17 @@ window.onload = function () {
                 myClientId = dataView.getUint32(headerSize, true);
                 console.log("I am " + myClientId);
                 break;
+            case MSG_IN_BULLET_CREATE:
+                var id = dataView.getUint32(headerSize, true);
+                var ownerId = dataView.getUint32(headerSize + 4, true);
+                var x = dataView.getFloat32(headerSize + 8, true);
+                var y = dataView.getFloat32(headerSize + 12, true);
+                var vx = dataView.getFloat32(headerSize + 16, true);
+                var vy = dataView.getFloat32(headerSize + 20, true);
+                bullets[id] = new Bullet(id, ownerId, x, y, vx, vy, msgClientTime);
+                break;
             case MSG_IN_BULLET_STATE:
+                /*
                 if (!spaceMode) {
                     var bulletsNum = dataView.getUint32(headerSize, true);
                     var headerOffset = headerSize + 4;
@@ -423,13 +418,12 @@ window.onload = function () {
                         var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
                         var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
                         if (!bullets[id]) {
-                            bullets[id] =
-                                new Bullet(bulletX, bulletY, id);
+                            console.log("Bug! The bullet should have already been created!");
                         } else {
                             bullets[id].updateState(bulletX, bulletY);
                         }
                     }
-                }
+                } */
                 break;
             case MSG_IN_DEATH:
                 var messageData = new Int32Array(evt.data.slice(headerSize));
@@ -648,16 +642,9 @@ window.onload = function () {
     var deltaTime = 0;
     function tick(evt) {
         var curTime = performance.now();
-        if (INTERPOLATION_ENABLED) {
-            for (var id in bullets) {
-                var bullet = bullets[id];
-                if (bullet.shape.x < -99) {
-                    console.log("invisible, don't care yet");
-                    continue;
-                }
-                bullet.shape.x += (bullet.vx * deltaTime) | 0;
-                bullet.shape.y += (bullet.vy * deltaTime) | 0;
-            }
+        for (var id in bullets) {
+            var bullet = bullets[id];
+            bullet.updateState(curTime);
         }
         //changeAngle(inputState.changingAngle, 0.04 * deltaTime);
         render.redraw();

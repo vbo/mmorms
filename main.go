@@ -44,7 +44,6 @@ const BULLET_RAD = 5
 const BULLET_SPEED = 20
 
 const GRAV_ACC = 30
-const GRAV_SPEED = 100
 
 const TANK_RAD = 0
 const TANK_SPEED = 20
@@ -74,6 +73,7 @@ const (
     MSG_OUT_DEATH = 4
     MSG_OUT_LEADERBOARD = 5
     MSG_OUT_MAP_CHANGE = 6
+    MSG_OUT_BULLET_CREATED = 7
     MSG_OUT_PING = 80
 )
 const MSG_HEADER_SIZE = 1 + 8
@@ -485,14 +485,26 @@ func gameLoop(net *Network) {
                             id := net.GetNewObjectId()
                             x := tank.x + TANK_GUN_LENGTH * aimX
                             y := tank.y - TANK_TOWER_HEIGHT * (1 - aimY)
-                            bullets = append(bullets, Bullet{
+                            bullet := Bullet{
                                 id: id,
                                 ownerId: client.id,
                                 x: x,
                                 y: y,
                                 vx: vx,
                                 vy: vy,
-                            })
+                            }
+                            bullets = append(bullets, bullet)
+                            messageBuffer := createMsg(MSG_OUT_BULLET_CREATED, startTime, 4*6);
+                            message := messageBuffer[MSG_HEADER_SIZE:]
+                            binary.LittleEndian.PutUint32(message, bullet.id)
+                            binary.LittleEndian.PutUint32(message[4:], bullet.ownerId)
+                            binary.LittleEndian.PutUint32(message[8:], math.Float32bits(float32(bullet.x)))
+                            binary.LittleEndian.PutUint32(message[12:], math.Float32bits(float32(bullet.y)))
+                            binary.LittleEndian.PutUint32(message[16:], math.Float32bits(float32(bullet.vx)))
+                            binary.LittleEndian.PutUint32(message[20:], math.Float32bits(float32(bullet.vy)))
+                            for _, client := range(clients) {
+                                client.outgoing <- messageBuffer
+                            }
                             //log.Printf("New wild bullet created %d", id)
                         }
 
