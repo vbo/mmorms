@@ -3,6 +3,7 @@ window.onload = function () {
 
     var HINTS = [
         'By holding the "c" button you shoot further.',
+        'By holding the "x" button you jump higher.',
         '"z" button turns on the shield.',
         '"x" button allows you to jump.',
         'Make sure you have a good speed before jumping',
