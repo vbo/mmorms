@@ -242,6 +242,7 @@ window.onload = function () {
     }
 
     var leaderBoardTitle = new createjs.Text("LEADERBOARD", "12px Roboto", "Black");
+    leaderBoardTitle.visible = false;
     leaderBoardTitle.y = 5;
     leaderBoardTitle.x = 45;
     render.stage.addChild(leaderBoardTitle);
@@ -270,9 +271,11 @@ window.onload = function () {
             leaderboardNickLines[i].text = "";
             leaderboardFragLines[i].text = "";
         }
+        leaderBoardTitle.visible = false;
         for (var i = 0; i <= Math.min(entries.length, MAX_LEADERS); i++) {
             var leader = entries[i];
             if (leader && leader.frags != 0) {
+                leaderBoardTitle.visible = true;
                 leaderboardNickLines[i].text = "#" + i + "    " + leader.name.substring(0,12);
                 leaderboardFragLines[i].text = leader.frags;
             }

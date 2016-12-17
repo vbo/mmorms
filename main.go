@@ -279,10 +279,10 @@ func simulateWorld(
             }
         }
         for tankID, tank := range tanks {
-            // Explode dead tanks.
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, 0, clients, startTime)
                 delete(tanks, tankID)
+                clients[tankID].lifeFrags = 0;
             }
             // Drop shields
             if tank.shield && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_DURATION {
@@ -820,8 +820,8 @@ func explodeAt(cx int32,
             if tank.shield { continue }
             realDmg := uint32(math.Min(dmg, float64(tank.hp)))
             tank.hp -= realDmg
-            if owner != nil && tanks[tankID].hp <= 0 && tankID != owner.id {
-                //owner.name = append(owner.name, []byte(string('★')))
+            if owner != nil && tanks[owner.id] != nil &&
+                    tanks[tankID].hp <= 0 && tankID != owner.id {
                 owner.lifeFrags += 1
                 if clients[tankID] != nil {
                     owner.lifeFrags += clients[tankID].lifeFrags
