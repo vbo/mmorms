@@ -1,11 +1,12 @@
 package botai
 
 import (
-    "time"
     "encoding/binary"
-    "math/rand"
     "fmt"
     "log"
+    "math"
+    "math/rand"
+    "time"
 )
 
 type Bot struct {
@@ -64,14 +65,17 @@ func Start(input, output chan []byte, deletionChan chan bool) {
             }
         default:
             var msgData []byte
-            rnd := rand.Intn(100)
+            rnd := rand.Intn(101)
             if rnd % 15 == 0 {
                 msgData = make([]byte, 10)
                 msgData[0] = 1 //MSG_IN_SHOOTING
                 msgData[1] = uint8(rand.Intn(5) + 5)
             } else if rnd % 17 == 0 {
-                msgData = make([]byte, 1)
+                msgData = make([]byte, 2)
                 msgData[0] = 3 //MSG_IN_JUMP
+                rndNorm := math.Abs(rand.NormFloat64() * 3.0)
+                power := byte(rndNorm)
+                msgData[1] = byte(power)
             } else {
                 msgData = make([]byte, 6)
                 msgData[0] = 0 // MSG_IN_MOVING

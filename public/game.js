@@ -39,10 +39,11 @@ window.onload = function () {
     var MSG_OUT_SHIELD = 2
     var MSG_OUT_JUMP = 3
     var MSG_OUT_START = 32
-    var GROUP = Math.round(Math.random()*100) % 2;
+
+    var JUMP_POWERUP_SPEED = 0.004;
+    var SHOOT_POWERUP_SPEED = 0.01;
 
     var SERVER_TICK_DELAY = 50;
-    var PING_DELAY = 100;
     var INTERPOLATION_ENABLED = true;
 
     var mapSet = false;
@@ -56,7 +57,8 @@ window.onload = function () {
       changingAngle: 0,
       wasMoving: 0,
       wasChangingAngle: 0,
-      power: 0,
+      jumpPower: 0,
+      shootPower: 0
     };
 
     render.init(WIDTH, HEIGHT);
@@ -99,25 +101,55 @@ window.onload = function () {
         this.shape.y = this.y;
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
         this.body = new createjs.Bitmap("/tank6-body.png");
+
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.hpLabel.textAlign = "center";
-        this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
+        
         this.shield = new createjs.Shape();
         this.shield.graphics.beginStroke("blue").beginFill("blue").drawCircle(0, 0, 35);
         this.shield.alpha = 0.1;
+        this.shield.visible = !!shield;
+
         this.shieldBar = new createjs.Shape();
         this.shieldBar.graphics.beginStroke("white").drawRect(-3, -1, 7, 2);
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
         this.shieldBar.shadow = new createjs.Shadow("white", 0, 0, 2);
-        this.shield.visible = !!shield;
+
+        this.shootBar = new createjs.Shape();
+        this.shootBar.graphics.setStrokeStyle(2).beginStroke("red")
+            .drawRect(-24, 16, 49, 4);
+        this.shootBar.visible = false;
+
+        this.shootProgress = new createjs.Shape();
+        this.shootProgress.graphics.setStrokeStyle(2).beginStroke("red")
+            .drawRect(-24, 17, 49, 2);
+        this.shootProgress.visible = false;
+
+        this.jumpBar = new createjs.Shape();
+        this.jumpBar.graphics.setStrokeStyle(2).beginStroke("white")
+            .drawRect(-24, 22, 49, 4);
+        this.jumpBar.visible = false;
+
+        this.jumpProgress = new createjs.Shape();
+        this.jumpProgress.graphics.setStrokeStyle(2).beginStroke("white")
+            .drawRect(-24, 23, 49, 2);
+        this.jumpProgress.visible = false;
+
+        this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.nickLabel.textAlign = "center";
         this.nickLabel.maxWidth = 100;
+        
         this.shape.addChild(this.gun);
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
         this.shape.addChild(this.shield);
         this.shape.addChild(this.shieldBar);
         this.shape.addChild(this.nickLabel);
+        this.shape.addChild(this.jumpBar);
+        this.shape.addChild(this.jumpProgress);
+        this.shape.addChild(this.shootBar);
+        this.shape.addChild(this.shootProgress);
+        
         this.gun.regX = 46;
         this.gun.regY = 25;
         this.gun.rotation = angle;
@@ -190,6 +222,9 @@ window.onload = function () {
     
     Bullet.prototype.updateState = function(t) {
         var dt = (t - this.creationTime) / 1000;
+        if (dt < 0) {
+            return;
+        }
         this.shape.x = (this.x0 + this.vx * dt) | 0;
         this.shape.y = (this.y0 + this.vy * dt + GRAV_ACC * dt * dt / 2) | 0;
     }
@@ -447,7 +482,8 @@ window.onload = function () {
                 if (tanks.hasOwnProperty(deadId)) {
                     tanks[deadId].destroy();
                     if (deadId == myClientId) {
-                        inputState.power = 0;
+                        inputState.shootPower = 0;
+                        inputState.jumpPower = 0;
                         showLogin(tanks[deadId].lifeFrags);
                     }
                     delete tanks[deadId];
@@ -465,8 +501,8 @@ window.onload = function () {
     }
 
 
-    function getShootingPower(inputState) {
-        var power = Math.floor((Date.now() - inputState.power) / 100);
+    function getPower(timeStart, speed) {
+        var power = Math.floor((Date.now() - timeStart) * speed);
         if (power <= 0) {
             power = 1;
         }
@@ -505,18 +541,45 @@ window.onload = function () {
             }
         }
         if (e.code == "KeyC") {
-            if (inputState.power == 0) {
-                inputState.power = Date.now();
-                var updateGun = function () {
-                    if (inputState.power == 0) {
+            if (inputState.shootPower == 0) {
+                inputState.shootPower = Date.now();
+                var updateShootProgress = function () {
+                    if (inputState.shootPower == 0) {
                         return;
                     }
-                    var power = getShootingPower(inputState);
+                    var power = getPower(inputState.shootPower, SHOOT_POWERUP_SPEED);
+                    if (power > 1) {
+                        me().shootProgress.visible = true;
+                        me().shootBar.visible = true;
+                        me().shootProgress.graphics.clear().setStrokeStyle(2)
+                            .beginStroke("red")
+                            .drawRect(-24, 16, (49 * power / 10) | 0, 2);
+                    }
                     me().gun.filters = [new createjs.ColorFilter(1, 1, 1, 1, power/10*150, 0, 0, 0)];
                     me().gun.cache(0, 0, 100, 100);
-                    setTimeout(updateGun, 100);
+                    setTimeout(updateShootProgress, 1/SHOOT_POWERUP_SPEED);
                 }
-                updateGun();
+                updateShootProgress();
+            }
+        }
+        if (e.code == "KeyX") {
+            if (inputState.jumpPower == 0) {
+                inputState.jumpPower = Date.now();
+                var updateJumpProgress = function () {
+                    if (inputState.jumpPower == 0) {
+                        return;
+                    }
+                    var power = getPower(inputState.jumpPower, JUMP_POWERUP_SPEED);
+                    if (power > 1) {
+                        me().jumpProgress.visible = true;
+                        me().jumpBar.visible = true;
+                        me().jumpProgress.graphics.clear().setStrokeStyle(2)
+                            .beginStroke("white")
+                            .drawRect(-24, 23, (49 * power / 10) | 0, 2);
+                    }
+                    setTimeout(updateJumpProgress, 1/JUMP_POWERUP_SPEED);
+                }
+                updateJumpProgress();
             }
         }
     });
@@ -546,13 +609,15 @@ window.onload = function () {
             inputState.changingAngle = 0;
         }
         if (e.code == "KeyC") {
-            inputState.power = getShootingPower(inputState);
-            var messageBuffer = new ArrayBuffer(10);
+            inputState.shootPower = getPower(inputState.shootPower, SHOOT_POWERUP_SPEED);
+            var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHOOTING);
-            dataView.setUint8(1, inputState.power);
+            dataView.setUint8(1, inputState.shootPower);
             conn.send(messageBuffer);
-            inputState.power = 0;
+            me().shootProgress.visible = false;
+            me().shootBar.visible = false;
+            inputState.shootPower = 0;
             me().gun.filters = [];
             me().gun.cache(0, 0, 100, 100);
         }
@@ -563,9 +628,14 @@ window.onload = function () {
             conn.send(messageBuffer);
         }
         if (e.code == "KeyX") {
-            var messageBuffer = new ArrayBuffer(1);
+            inputState.jumpPower = getPower(inputState.jumpPower, JUMP_POWERUP_SPEED);
+            var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_JUMP);
+            dataView.setUint8(1, inputState.jumpPower);
+            me().jumpProgress.visible = false;
+            me().jumpBar.visible = false;
+            inputState.jumpPower = 0;
             conn.send(messageBuffer);
         }
     });

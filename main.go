@@ -517,7 +517,13 @@ func gameLoop(net *Network) {
                     case MSG_IN_JUMP:
                         tank, ok := tanks[client.id]
                         if ok && isGroundF(tank.x, tank.y + 1, mapBitmap) {
-                            tank.vy = -40
+                            power := float64(message.data[1])
+                            if power <= 0 {
+                                power = 1
+                            } else if power > 10 {
+                                power = 10
+                            }
+                            tank.vy = -40 * math.Sqrt(power)
                             tank.jumping = true
                         }
 
