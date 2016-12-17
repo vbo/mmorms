@@ -583,9 +583,8 @@ func gameLoop(net *Network) {
                 numGroundDestroyed = 0
                 log.Println("Trasfer finished")
 
-                mapChangeMsg := make([]byte, 2)
-                mapChangeMsg[0] = MSG_OUT_MAP_CHANGE
-                mapChangeMsg[1] = 0
+                mapChangeMsg := createMsg(MSG_OUT_MAP_CHANGE, startTime, 1)
+                mapChangeMsg[MSG_HEADER_SIZE] = 0
                 for _,client := range(clients) {
                     client.outgoing <- mapChangeMsg
                 }
