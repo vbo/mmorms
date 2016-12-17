@@ -388,8 +388,7 @@ window.onload = function () {
                     if (tanks[id]) {
                         tanks[id].updateName(name, lifeFrags);
                     }
-                    var frags = GROUP == 0 ? lifeFrags : sessionFrags;
-                    leaderboard[i] = new LeaderboardEntry(id, name, frags);
+                    leaderboard[i] = new LeaderboardEntry(id, name, lifeFrags);
                     p += 13 + nameLen;
                 }
                 updateLeaderboard(leaderboard);
@@ -469,7 +468,6 @@ window.onload = function () {
                     tanks[deadId].destroy();
                     if (deadId == myClientId) {
                         inputState.power = 0;
-                        console.log(tanks[deadId].lifeFrags);
                         showLogin(tanks[deadId].lifeFrags);
                     }
                     delete tanks[deadId];
