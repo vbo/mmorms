@@ -35,7 +35,7 @@ func Start(input, output chan []byte, deletionChan chan bool) {
     for {
         message := <-bot.input
         if (message[0] == 2) {
-            bot.id = binary.LittleEndian.Uint32(message[1:])
+            bot.id = binary.LittleEndian.Uint32(message[9:])
             break
         }
     }
@@ -48,7 +48,7 @@ func Start(input, output chan []byte, deletionChan chan bool) {
         case message := <-bot.input:
             switch message[0] {
             case 4: // MSG_OUT_DEATH
-                deadId := binary.LittleEndian.Uint32(message[1:])
+                deadId := binary.LittleEndian.Uint32(message[9:])
                 if (deadId == bot.id) {
                     bot.direction = 1
                     select {
