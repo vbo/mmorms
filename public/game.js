@@ -29,7 +29,6 @@ window.onload = function () {
     var MSG_IN_MAP = 0
     var MSG_IN_STATE = 1
     var MSG_IN_GREETING = 2
-    var MSG_IN_BULLET_STATE = 3
     var MSG_IN_DEATH = 4
     var MSG_IN_LEADERBOARD = 5
     var MSG_IN_MAP_CHANGE = 6
@@ -43,6 +42,7 @@ window.onload = function () {
     var GROUP = Math.round(Math.random()*100) % 2;
 
     var SERVER_TICK_DELAY = 50;
+    var PING_DELAY = 100;
     var INTERPOLATION_ENABLED = true;
 
     var mapSet = false;
@@ -402,23 +402,6 @@ window.onload = function () {
                 var vx = dataView.getFloat32(headerSize + 16, true);
                 var vy = dataView.getFloat32(headerSize + 20, true);
                 bullets[id] = new Bullet(id, ownerId, x, y, vx, vy, msgClientTime);
-                break;
-            case MSG_IN_BULLET_STATE:
-                /*
-                if (!spaceMode) {
-                    var bulletsNum = dataView.getUint32(headerSize, true);
-                    var headerOffset = headerSize + 4;
-                    for (var i = 0; i < bulletsNum; i++) {
-                        var id = dataView.getUint32(headerOffset + i*12, true);
-                        var bulletX = dataView.getUint32(headerOffset + i*12 + 4, true);
-                        var bulletY = dataView.getUint32(headerOffset + i*12 + 8, true);
-                        if (!bullets[id]) {
-                            console.log("Bug! The bullet should have already been created!");
-                        } else {
-                            bullets[id].updateState(bulletX, bulletY);
-                        }
-                    }
-                } */
                 break;
             case MSG_IN_DEATH:
                 var messageData = new Int32Array(evt.data.slice(headerSize));

@@ -69,7 +69,6 @@ const (
     MSG_OUT_MAP = 0
     MSG_OUT_STATE = 1
     MSG_OUT_GREETING = 2
-    MSG_OUT_BULLET_STATE = 3
     MSG_OUT_DEATH = 4
     MSG_OUT_LEADERBOARD = 5
     MSG_OUT_MAP_CHANGE = 6
@@ -593,7 +592,6 @@ func gameLoop(net *Network) {
 
         // Broadcast world snapshot
         broadcastTanks(tanks, clients, startTime)
-        broadcastBullets(bullets, clients, startTime)
         broadcastLeaderboard(clients, startTime)
 
         if newMapBitmap == nil && numGroundDestroyed > int(float64(mapBitmapPixelCount) * DESTROYED_FRACTION_TO_SPACE) {
@@ -752,21 +750,6 @@ func createMsg(msgType byte, time time.Time, size int) []byte {
     timeInFloat := float64(time.UnixNano() / 1000000)
     binary.LittleEndian.PutUint64(result[1:], math.Float64bits(timeInFloat))
     return result
-}
-
-func broadcastBullets(bullets []Bullet, clients map[uint32]*Client, startTime time.Time) {
-    bulletsMessageBuffer := createMsg(MSG_OUT_BULLET_STATE, startTime, len(bullets) * 12 + 4)
-    binary.LittleEndian.PutUint32(bulletsMessageBuffer[MSG_HEADER_SIZE:], uint32(len(bullets)))
-    message := bulletsMessageBuffer[MSG_HEADER_SIZE + 4:]
-    for _, bullet := range bullets {
-        binary.LittleEndian.PutUint32(message[0:], bullet.id)
-        binary.LittleEndian.PutUint32(message[4:], uint32(bullet.x))
-        binary.LittleEndian.PutUint32(message[8:], uint32(bullet.y))
-        message = message[12:]
-    }
-    for clientId, _ := range clients {
-        clients[clientId].outgoing <- bulletsMessageBuffer[0 : len(bulletsMessageBuffer)]
-    }
 }
 
 func broadcastDeath(id uint32, x float64, y float64, radius int32,
