@@ -174,7 +174,6 @@ window.onload = function () {
     }
 
     function Bullet (id, ownerId, x, y, vx, vy, creationTime) {
-        console.log("New bullet @ ", x, y);
         this.x0 = x;
         this.y0 = y;
         this.vx = vx;
@@ -191,8 +190,8 @@ window.onload = function () {
     
     Bullet.prototype.updateState = function(t) {
         var dt = (t - this.creationTime) / 1000;
-        this.shape.x = this.x0 + this.vx * dt;
-        this.shape.y = this.y0 + this.vy * dt + GRAV_ACC * dt * dt / 2;
+        this.shape.x = (this.x0 + this.vx * dt) | 0;
+        this.shape.y = (this.y0 + this.vy * dt + GRAV_ACC * dt * dt / 2) | 0;
         console.log(dt, this.shape.x, this.shape.y);
     }
 
