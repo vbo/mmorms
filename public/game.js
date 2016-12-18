@@ -42,7 +42,7 @@ window.onload = function () {
     var MSG_OUT_START = 32
 
     var JUMP_POWERUP_SPEED = 0.004;
-    var SHOOT_POWERUP_SPEED = 0.01;
+    var SHOOT_POWERUP_SPEED = 0.0075;
 
     var SERVER_TICK_DELAY = 50;
     var INTERPOLATION_ENABLED = true;
