@@ -172,6 +172,30 @@ window.onload = function () {
     Tank.prototype.updateState = function(x, y, hp, angle, shield, shieldPercent, direction) {
         this.x = x;
         this.y = y;
+        if (me() && me().clientId == this.clientId && hp < this.hp) {
+            var hurtScreen = new createjs.Shape();
+            hurtScreen.graphics.beginFill("red").drawRect(0,0, WIDTH, HEIGHT);
+            hurtScreen.alpha = 0.1;
+            render.stage.addChild(hurtScreen);
+            var pickReached = false;
+            var animateHurtScreen = function() {
+                if (!pickReached) {
+                    hurtScreen.alpha += 0.3;
+                    if (hurtScreen.alpha >= 0.5) {
+                        pickReached = true;
+                    }
+                    setTimeout(animateHurtScreen, 30);
+                } else {
+                    hurtScreen.alpha -= 0.05;
+                    if (hurtScreen.alpha > 0) {
+                        setTimeout(animateHurtScreen, 30);
+                    } else {
+                        render.stage.removeChild(hurtScreen);
+                    }
+                }
+            };
+            setTimeout(animateHurtScreen, 10);
+        }
         this.hp = hp;
         // TODO: very rarely bugs happen here. No idea why =/
         if (INTERPOLATION_ENABLED && me() && this.clientId != me().clientId) {
