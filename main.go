@@ -104,8 +104,8 @@ var MAPS_LOADED = make([]image.Image, len(MAP_FILES))
 
 func NewTank() *Tank {
     return &Tank{
-        x: float64(1 + rand.Intn(WIDTH - 1)),
-        y: 20,
+        x: float64(TANK_WIDTH/2 + rand.Intn(WIDTH - TANK_WIDTH/2)),
+        y: 50,
         direction: 1,
         hp: 100,
     }
@@ -157,6 +157,16 @@ func simulateWorldInSpace(tanks map[uint32]*Tank,
     return numFinished
 }
 
+func outOfScreenX(x float64, vx float64) bool {
+    return (vx > 0 && x + TANK_WIDTH/2 > WIDTH) ||
+        (vx < 0 && x - TANK_WIDTH/2 < 0);
+}
+
+func outOfScreenY(y float64, vy float64) bool {
+    return (vy > 0 && y > HEIGHT) ||
+        (vy < 0 && y - TANK_HEIGHT < 0);
+}
+
 func simulateWorld(
     tanks map[uint32]*Tank,
     bulletsIn *[]Bullet,
@@ -183,11 +193,17 @@ func simulateWorld(
                     tank.vx += float64(tank.moving) * TANK_AIR_ACC * dt
                 }
                 tank.x += tank.vx * dt
+                if outOfScreenX(tank.x, tank.vx) {
+                    tank.x = oldX
+                }
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.x = oldX
                     tank.vx = 0
                 }
                 tank.y += tank.vy * dt
+                if outOfScreenX(tank.y, tank.vy) {
+                    tank.y = oldY
+                }
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.y = oldY
                     tank.vy = 0
@@ -197,6 +213,9 @@ func simulateWorld(
                 tank.vy = 0
                 tank.vx = float64(tank.moving) * TANK_SPEED
                 tank.x += tank.vx * dt
+                if outOfScreenX(tank.x, tank.vx) {
+                    tank.x = oldX
+                }
                 // hill sliding mechanics:
                 if isGroundF(tank.x, oldY, mapBitmap) {
                     for i := 1; i <= 2; i++ {
