@@ -195,6 +195,7 @@ func simulateWorld(
                 tank.x += tank.vx * dt
                 if outOfScreenX(tank.x, tank.vx) {
                     tank.x = oldX
+                    tank.vx = 0
                 }
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.x = oldX
@@ -203,6 +204,7 @@ func simulateWorld(
                 tank.y += tank.vy * dt
                 if outOfScreenX(tank.y, tank.vy) {
                     tank.y = oldY
+                    tank.vy = 0
                 }
                 if (isGroundF(tank.x, tank.y, mapBitmap)) {
                     tank.y = oldY
@@ -215,6 +217,7 @@ func simulateWorld(
                 tank.x += tank.vx * dt
                 if outOfScreenX(tank.x, tank.vx) {
                     tank.x = oldX
+                    tank.vx = 0
                 }
                 // hill sliding mechanics:
                 if isGroundF(tank.x, oldY, mapBitmap) {
