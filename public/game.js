@@ -119,13 +119,13 @@ window.onload = function () {
         this.shootBar = new createjs.Shape();
         this.shootBar.graphics.setStrokeStyle(2).beginStroke("red")
             .drawRect(-18, 16, 37, 4);
-        this.shootBar.alpha = 0.8;
+        this.shootBar.alpha = 0.9;
         this.shootBar.visible = false;
 
         this.shootProgress = new createjs.Shape();
         this.shootProgress.graphics.setStrokeStyle(2).beginStroke("red")
             .drawRect(-18, 17, 37, 2);
-        this.shootProgress.alpha = 0.7;
+        this.shootProgress.alpha = 0.8;
         this.shootProgress.visible = false;
 
         this.jumpBar = new createjs.Shape();
@@ -180,8 +180,8 @@ window.onload = function () {
             var pickReached = false;
             var animateHurtScreen = function() {
                 if (!pickReached) {
-                    hurtScreen.alpha += 0.3;
-                    if (hurtScreen.alpha >= 0.5) {
+                    hurtScreen.alpha += 0.1;
+                    if (hurtScreen.alpha >= 0.3) {
                         pickReached = true;
                     }
                     setTimeout(animateHurtScreen, 30);
