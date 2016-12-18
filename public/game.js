@@ -70,8 +70,10 @@ window.onload = function () {
     }
 
     window.sendStart = function (login) {
-        if (!conn) {
-            setTimeout(window.sendStart(login), 100);
+        if (!conn || conn.readyState !== conn.OPEN) {
+            setTimeout(function() {
+                window.sendStart(login);
+            }, 100);
         } else {
             conn.send(String.fromCharCode(MSG_OUT_START) + login);
         }
