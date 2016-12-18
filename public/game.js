@@ -118,22 +118,26 @@ window.onload = function () {
 
         this.shootBar = new createjs.Shape();
         this.shootBar.graphics.setStrokeStyle(2).beginStroke("red")
-            .drawRect(-24, 16, 49, 4);
+            .drawRect(-18, 16, 37, 4);
+        this.shootBar.alpha = 0.8;
         this.shootBar.visible = false;
 
         this.shootProgress = new createjs.Shape();
         this.shootProgress.graphics.setStrokeStyle(2).beginStroke("red")
-            .drawRect(-24, 17, 49, 2);
+            .drawRect(-18, 17, 37, 2);
+        this.shootProgress.alpha = 0.7;
         this.shootProgress.visible = false;
 
         this.jumpBar = new createjs.Shape();
         this.jumpBar.graphics.setStrokeStyle(2).beginStroke("white")
-            .drawRect(-24, 22, 49, 4);
+            .drawRect(-18, 22, 37, 4);
+        this.jumpBar.alpha = 0.8;
         this.jumpBar.visible = false;
 
         this.jumpProgress = new createjs.Shape();
         this.jumpProgress.graphics.setStrokeStyle(2).beginStroke("white")
-            .drawRect(-24, 23, 49, 2);
+            .drawRect(-18, 23, 37, 2);
+        this.jumpProgress.alpha = 0.7;
         this.jumpProgress.visible = false;
 
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
@@ -557,7 +561,7 @@ window.onload = function () {
                         me().shootBar.visible = true;
                         me().shootProgress.graphics.clear().setStrokeStyle(2)
                             .beginStroke("red")
-                            .drawRect(-24, 16, (49 * power / 10) | 0, 2);
+                            .drawRect(-18, 16, (37 * power / 10) | 0, 2);
                     }
                     me().gun.filters = [new createjs.ColorFilter(1, 1, 1, 1, power/10*150, 0, 0, 0)];
                     me().gun.cache(0, 0, 100, 100);
@@ -579,7 +583,7 @@ window.onload = function () {
                         me().jumpBar.visible = true;
                         me().jumpProgress.graphics.clear().setStrokeStyle(2)
                             .beginStroke("white")
-                            .drawRect(-24, 23, (49 * power / 10) | 0, 2);
+                            .drawRect(-18, 23, (37 * power / 10) | 0, 2);
                     }
                     setTimeout(updateJumpProgress, 1/JUMP_POWERUP_SPEED);
                 }
