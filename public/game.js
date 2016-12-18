@@ -101,7 +101,7 @@ window.onload = function () {
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
-        this.body = new createjs.Bitmap("/tank6-body.png");
+        this.body = new createjs.Bitmap("/tank6-body-fix1.png");
 
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.hpLabel.textAlign = "center";
