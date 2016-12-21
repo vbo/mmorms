@@ -36,6 +36,14 @@ type Bullet struct {
     vx, vy float64
 }
 
+type Takable struct {
+    id uint32
+    x, y float64
+    vx, vy float64
+    objectType int8
+    objectValue int8
+}
+
 const EXPLOSION_DMG = 70
 const EXPLOSION_DMG_FALLOFF = 2
 
@@ -66,6 +74,10 @@ const WIDTH = 1260
 const HEIGHT = 620
 
 const (
+    TAKABLE_HP = 0
+)
+
+const (
     MSG_OUT_MAP = 0
     MSG_OUT_STATE = 1
     MSG_OUT_GREETING = 2
@@ -73,6 +85,7 @@ const (
     MSG_OUT_LEADERBOARD = 5
     MSG_OUT_MAP_CHANGE = 6
     MSG_OUT_BULLET_CREATED = 7
+    MSG_OUT_TAKABLE_STATE = 8
     MSG_OUT_PING = 80
 )
 const MSG_HEADER_SIZE = 1 + 8
@@ -170,6 +183,7 @@ func outOfScreenY(y float64, vy float64) bool {
 func simulateWorld(
     tanks map[uint32]*Tank,
     bulletsIn *[]Bullet,
+    takablesIn *[]Takable,
     mapBitmap []byte,
     dtTotalSeconds float64,
     startTime time.Time,
@@ -177,6 +191,7 @@ func simulateWorld(
     numGroundDestroyed *int) {
 
     bullets := *bulletsIn
+    takables := *takablesIn
     for dtTotalSeconds > 0.0 {
         dt := math.Min(0.005, dtTotalSeconds)
         dtTotalSeconds = dtTotalSeconds - dt
@@ -300,6 +315,13 @@ func simulateWorld(
                 bulletIndex++
             }
         }
+
+        takableIndex := 0
+        for takableIndex < len(takables) {
+            // TODO(levvy): same physics as applied to tanks + tank intersection
+            takableIndex++
+        }
+
         for tankID, tank := range tanks {
             if tank.hp == 0 {
                 broadcastDeath(tankID, tank.x, tank.y, 0, clients, startTime)
@@ -324,6 +346,7 @@ func gameLoop(net *Network) {
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
+    takables := make([]Takable, 0)
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
@@ -367,6 +390,20 @@ func gameLoop(net *Network) {
                 botDeletionChan <-true
             }
             lastPopulationCheck = time.Now()
+        }
+
+        // adding takables
+        if len(takables) < 1 {
+            takable := Takable{
+                id: net.GetNewObjectId(),
+                x: float64(TANK_WIDTH/2 + rand.Intn(WIDTH - TANK_WIDTH/2)),
+                y: 50,
+                vx: 0,
+                vy: 0,
+                objectType: TAKABLE_HP,
+                objectValue: 25,
+            }
+            takables = append(takables, takable)
         }
 
         // writing stats
@@ -583,6 +620,7 @@ func gameLoop(net *Network) {
         if !spaceMode {
             simulateWorld(tanks,
                 &bullets,
+                &takables,
                 mapBitmap,
                 dtTotalSeconds,
                 startTime,
@@ -619,6 +657,7 @@ func gameLoop(net *Network) {
         }
 
         // Broadcast world snapshot
+        broadcastTakables(takables, clients, startTime)
         broadcastTanks(tanks, clients, startTime)
         broadcastLeaderboard(clients, startTime)
 
@@ -730,6 +769,26 @@ func broadcastLeaderboard(clients map[uint32]*Client, startTime time.Time) {
     }
     for _, client := range clients {
         client.outgoing <- messageBuffer
+    }
+}
+
+
+func broadcastTakables(takables []Takable, clients map[uint32]*Client, startTime time.Time) {
+    stateMessageBuffer := createMsg(MSG_OUT_TAKABLE_STATE, startTime, 1 + len(takables) * 22)
+    stateMessageBuffer[MSG_HEADER_SIZE] = byte(len(takables))
+    message := stateMessageBuffer[MSG_HEADER_SIZE + 1:]
+    for id, takable := range takables {
+        binary.LittleEndian.PutUint32(message[0:], uint32(id))
+        binary.LittleEndian.PutUint32(message[4:], uint32(takable.x))
+        binary.LittleEndian.PutUint32(message[8:], uint32(takable.y))
+        binary.LittleEndian.PutUint32(message[12:], math.Float32bits(float32(takable.vx)))
+        binary.LittleEndian.PutUint32(message[16:], math.Float32bits(float32(takable.vy)))
+        message[20] = byte(takable.objectType)
+        message[21] = byte(takable.objectValue)
+        message = message[22:]
+    }
+    for _, client := range clients {
+        client.outgoing <- stateMessageBuffer
     }
 }
 
