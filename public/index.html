@@ -4,6 +4,8 @@
         <title>Tankoids - artillery based shooter game</title>
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
         <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"/>
+        <script src="/text-encoding/encoding-indexes.js"></script>
+        <script src="/text-encoding/encoding.js"></script>
         <script src="/render.js?v1.4"></script>
         <script src="/game.js?v1.4"></script>
         <meta name="description" content="Free multiplayer real-time artillery shooting game with tanks inspired by Worms, available in your browser."/>
@@ -68,7 +70,8 @@
                 <script>
                 var isFirefox = typeof InstallTrigger !== 'undefined';
                 var isChrome = !!window.chrome && !!window.chrome.webstore;
-                if (!isFirefox && !isChrome) {
+                var isSafari = Object.prototype.toString.call(window.HTMLElement).indexOf('Constructor') > 0 || (function (p) { return p.toString() === "[object SafariRemoteNotification]"; })(!window['safari'] || safari.pushNotification);
+                if (!isFirefox && !isChrome && !isSafari) {
                     alert("Unfortunately the game doesn't support your web browser. Try Chrome or Firefox instead.");
                 }
                 </script>

@@ -12,6 +12,15 @@ window.onload = function () {
         'When you destroy a tank, you get all it\'s power.'
     ];
 
+    var KEYCODE_ENTER = 13;
+    var KEYCODE_Z = 90;
+    var KEYCODE_X = 88;
+    var KEYCODE_C = 67;
+    var KEYCODE_UP = 38;
+    var KEYCODE_RIGHT = 39;
+    var KEYCODE_DOWN = 40;
+    var KEYCODE_LEFT = 37;
+
     var conn;
     var myClientId;
     var tanks = {};
@@ -592,7 +601,8 @@ window.onload = function () {
 
 
     window.addEventListener("keydown", function(e) {
-        if (e.code == "Enter" &&
+        var keyCode = 'which' in e ? e.which : e.keyCode;
+        if (keyCode == KEYCODE_ENTER &&
             document.getElementById("overlay").style.display != "none") {
             onPlayButtonClicked();
             return;
@@ -600,10 +610,10 @@ window.onload = function () {
         if (!me()) {
             return;
         }
-        if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-            var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+        if (keyCode == KEYCODE_LEFT || keyCode == KEYCODE_RIGHT) {
+            var newDir = (keyCode == KEYCODE_LEFT) ? -1 : 1;
             if (INTERPOLATION_ENABLED) {
-                var newDir = (e.code == "ArrowLeft") ? -1 : 1;
+                var newDir = (keyCode == KEYCODE_LEFT) ? -1 : 1;
                 if (newDir != me().direction) {
                     me().gun.rotation = 180 - me().gun.rotation;
                     me().direction = newDir;
@@ -611,14 +621,14 @@ window.onload = function () {
             }
             inputState.moving = newDir;
         }
-        if (e.code == "ArrowUp" || e.code == "ArrowDown") {
-            var rotationDirection = (e.code == "ArrowUp" ? 1 : -1);
+        if (keyCode == KEYCODE_UP || keyCode == KEYCODE_DOWN) {
+            var rotationDirection = (keyCode == KEYCODE_UP ? 1 : -1);
             if (rotationDirection != inputState.changingAngle) {
                 inputState.startChangingAngle = performance.now();
                 inputState.changingAngle = rotationDirection; 
             }
         }
-        if (e.code == "KeyC") {
+        if (keyCode == KEYCODE_C) {
             if (inputState.shootPower == 0) {
                 inputState.shootPower = Date.now();
                 var updateShootProgress = function () {
@@ -640,7 +650,7 @@ window.onload = function () {
                 updateShootProgress();
             }
         }
-        if (e.code == "KeyX") {
+        if (keyCode == KEYCODE_X) {
             if (inputState.jumpPower == 0) {
                 inputState.jumpPower = Date.now();
                 var updateJumpProgress = function () {
@@ -671,22 +681,23 @@ window.onload = function () {
     }
 
     window.addEventListener("keyup", function(e) {
+        var keyCode = 'which' in e ? e.which : e.keyCode;
         if (!me()) {
             return;
         }
-        if (e.code == "ArrowLeft" || e.code == "ArrowRight") {
-            var keyUpDir = (e.code == "ArrowLeft") ? -1 : 1;
+        if (keyCode == KEYCODE_LEFT || keyCode == KEYCODE_RIGHT) {
+            var keyUpDir = (keyCode == KEYCODE_LEFT) ? -1 : 1;
             if (keyUpDir == inputState.moving) {
                 inputState.wasMoving = inputState.moving;
                 inputState.moving = 0;
             }
         }
-        if (e.code == "ArrowUp" || e.code == "ArrowDown") {
+        if (keyCode == KEYCODE_UP || keyCode == KEYCODE_DOWN) {
             inputState.wasChangingAngle = scaleTimeToByte(inputState.changingAngle, inputState.startChangingAngle, 200);
             inputState.startChangingAngle = 0;
             inputState.changingAngle = 0;
         }
-        if (e.code == "KeyC") {
+        if (keyCode == KEYCODE_C) {
             inputState.shootPower = getPower(inputState.shootPower, SHOOT_POWERUP_SPEED);
             var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
@@ -699,13 +710,13 @@ window.onload = function () {
             me().gun.filters = [];
             me().gun.cache(0, 0, 100, 100);
         }
-        if (e.code == "KeyZ") {
+        if (keyCode == KEYCODE_Z) {
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHIELD);
             conn.send(messageBuffer);
         }
-        if (e.code == "KeyX") {
+        if (keyCode == KEYCODE_X) {
             inputState.jumpPower = getPower(inputState.jumpPower, JUMP_POWERUP_SPEED);
             var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
@@ -795,6 +806,7 @@ function onPlayButtonClicked () {
     var login = document.getElementById("loginInput").value;
     document.getElementById("overlay").style.display = "none";
     document.getElementById("login").style.display = "none";
+    document.activeElement.blur();
     ga('send', 'event', 'game', 'playButton', 'clicked', playButtonClicked);
     sendStart(login);
 }
