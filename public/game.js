@@ -595,7 +595,7 @@ window.onload = function () {
               }
               dataView.setUint8(2, inputState.wasChangingAngle);
               if (conn.readyState === conn.OPEN) {
-                  conn.send(dataView);
+                  conn.send(messageBuffer);
               } else {
                   //console.log("Still waiting for the conn to be established");
               }
