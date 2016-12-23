@@ -8,6 +8,8 @@ import (
     "time"
     "sync"
     "github.com/gorilla/websocket"
+    "flag"
+    "fmt"
 )
 
 import _ "net/http/pprof"
@@ -20,6 +22,9 @@ const PONG_TIMEOUT = 10 * time.Second
 const WRITE_TIMEOUT = 5 * time.Second
 const PING_PERIOD = 1 * time.Second
 const PINGS_RING = 8
+
+var addr = flag.String("addr", "localhost:8080", "http service address")
+var overlord = flag.String("overlord", "localhost:7070", "overlord address")
 
 type StatsRequest struct {
     w io.Writer
@@ -52,6 +57,15 @@ func (net *Network) GetNewObjectId() uint32 {
     return newID
 }
 
+func updateOverlord(players int) {
+    reqUrl := fmt.Sprintf("http://%s/update?url=ws://%s/ws&players=%d", *overlord, *addr, players)
+    resp, err := http.Get(reqUrl)
+    if err != nil {
+        log.Printf("Error updaring overlord: %s", err)
+    }
+    resp.Body.Close()
+}
+
 // Represents a single client. Should be allocated in heap
 // for each new connection and hold alive by pointer from Network.
 type Client struct {
@@ -63,6 +77,7 @@ type Client struct {
     name []byte
     observer bool
     isBot bool
+    lastUpdate time.Time
 }
 
 type Message struct {
@@ -207,14 +222,18 @@ func serveStats(net *Network, w http.ResponseWriter, r *http.Request) {
     <-done
 }
 
+func serveVarsJs(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "window.overlord='%s';", *overlord)
+}
 
-func runServer(net *Network, addr string) error {
+func runServer(net *Network) error {
     http.Handle("/", http.FileServer(http.Dir("./public")))
+    http.HandleFunc("/vars.js", serveVarsJs)
     http.HandleFunc("/ws", func (w http.ResponseWriter, r *http.Request) { serveWebsocket(net, w, r) })
     http.HandleFunc("/stats", func (w http.ResponseWriter, r *http.Request) { serveStats(net, w, r) })
 
-    log.Printf("Starting web server on %s...", addr)
-    return http.ListenAndServe(addr, nil)
+    log.Printf("Starting web server on %s...", *addr)
+    return http.ListenAndServe(*addr, nil)
 }
 
 func average(vs []float64) float64 {

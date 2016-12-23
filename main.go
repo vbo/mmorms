@@ -73,6 +73,8 @@ const POPULATION_CHECK_TIMEOUT = 9 * time.Second
 const WIDTH = 1260
 const HEIGHT = 620
 
+const CLIENT_ACTIVITY_TIMEOUT = 5 * time.Second
+
 const (
     TAKABLE_HP = 0
 )
@@ -342,7 +344,6 @@ func simulateWorld(
 var newMapBitmapPixelCount = 0
 
 func gameLoop(net *Network) {
-
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
@@ -390,6 +391,17 @@ func gameLoop(net *Network) {
                 botDeletionChan <-true
             }
             lastPopulationCheck = time.Now()
+        }
+
+        // registering with overlord
+        if curTick % 30 == 0 {
+            playerCount := 0
+            for _, client := range clients {
+                if !client.isBot && startTime.Sub(client.lastUpdate) < CLIENT_ACTIVITY_TIMEOUT {
+                    playerCount++
+                }
+            }
+            updateOverlord(playerCount)
         }
 
         // adding takables
@@ -510,10 +522,13 @@ func gameLoop(net *Network) {
                     break
                 }
                 client.ping = message.ping
+                tank, tankExists := tanks[client.id]
+                if tankExists {
+                    client.lastUpdate = startTime
+                }
                 switch message.data[0] {
                     case MSG_IN_MOVING:
-                        tank, ok := tanks[client.id]
-                        if ok {
+                        if tankExists {
                             newDirection := int8(message.data[1])
                             if newDirection != 0 && tank.direction != newDirection {
                                 tank.gunAngle = 180.0 - tank.gunAngle
@@ -524,8 +539,7 @@ func gameLoop(net *Network) {
                         }
 
                     case MSG_IN_SHOOTING:
-                        tank, ok := tanks[client.id]
-                        if ok && !spaceMode && startTime.Sub(tank.lastShotTime) > TANK_SHOT_DELAY {
+                        if tankExists && !spaceMode && startTime.Sub(tank.lastShotTime) > TANK_SHOT_DELAY {
                             tank.lastShotTime = startTime
                             power := float64(message.data[1])
                             if power <= 0 {
@@ -567,15 +581,13 @@ func gameLoop(net *Network) {
                         }
 
                     case MSG_IN_SHIELD:
-                        tank, ok := tanks[client.id]
-                        if ok && !spaceMode && !tank.shield && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
+                        if tankExists && !spaceMode && !tank.shield && startTime.Sub(tank.shieldFlipTime) > TANK_SHIELD_COOLDOWN {
                             tank.shield = true
                             tank.shieldFlipTime = startTime
                         }
 
                     case MSG_IN_JUMP:
-                        tank, ok := tanks[client.id]
-                        if ok && isGroundF(tank.x, tank.y + 1, mapBitmap) {
+                        if tankExists && isGroundF(tank.x, tank.y + 1, mapBitmap) {
                             power := float64(message.data[1])
                             if power <= 0 {
                                 power = 1
@@ -587,8 +599,7 @@ func gameLoop(net *Network) {
                         }
 
                     case MSG_IN_START:
-                        _, ok := tanks[client.id]
-                        if !ok {
+                        if !tankExists {
                             client.name = message.data[1:]
                             if len(client.name) == 0 {
                                 client.name = []byte(fmt.Sprintf("Tank%d", client.id))
@@ -976,7 +987,6 @@ func loadMap(path string) image.Image {
 }
 
 func main() {
-    var addr = flag.String("addr", ":8080", "http service address")
     flag.Parse()
     rand.Seed(time.Now().UTC().UnixNano())
 
@@ -988,7 +998,7 @@ func main() {
     }
     go gameLoop(&net)
 
-    serverErr := runServer(&net, *addr)
+    serverErr := runServer(&net)
     if serverErr != nil {
         log.Fatal("Server: ", serverErr)
     }
