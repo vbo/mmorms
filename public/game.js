@@ -366,252 +366,243 @@ window.onload = function () {
        return mapBitmap;
     }
 
-    var connectToGameServer = function (gameServerHost) {
-        if (window["WebSocket"]) {
-            conn = new WebSocket("ws://" + gameServerHost + "/ws");
-            conn.binaryType = "arraybuffer";
-            conn.onclose = function (evt) {
-                console.log("Connection closed")
-            };
-            conn.onerror = function (evt) {
-                console.log("Connection failed, trying again");
-                console.log(evt);
-                conn = new WebSocket("ws://" + window.location.host + "/ws");
-                conn.binaryType = "arraybuffer";
-            };
-            conn.onmessage = function (evt) {
-                var dataView = new DataView(evt.data);
-                var messageByteView = new Uint8Array(evt.data);
-                // TODO: Replace with DataView
-                var type = dataView.getUint8(0);
-                var msgServerTime = 0;
-                var msgClientTime = 0;
-                var headerSize = 1;
-                if (type != MSG_IN_MAP)  {
-                    headerSize = 9;
-                    if (dataView.byteLength < 2) {
-                        console.log(type);
-                    }
-                    msgServerTime = dataView.getFloat64(1, true);
-                    if (firstMessageServerTime < 0) {
-                        firstMessageServerTime = msgServerTime;
-                        firstMessageClientTime = performance.now();
-                    }
-                    msgClientTime = firstMessageClientTime + (msgServerTime - firstMessageServerTime);
+    var connectToGameServer = function (gameServerWSUrl) {
+        conn = new WebSocket(gameServerWSUrl);
+        conn.binaryType = "arraybuffer";
+        conn.onclose = function (evt) {
+            console.log("Connection closed")
+        };
+        conn.onerror = function (evt) {
+            // TODO(vbo): handle disconnection gracefully
+            console.log("Connection failed unexpectedly");
+            console.log(evt);
+        };
+        conn.onmessage = function (evt) {
+            var dataView = new DataView(evt.data);
+            var messageByteView = new Uint8Array(evt.data);
+            // TODO: Replace with DataView
+            var type = dataView.getUint8(0);
+            var msgServerTime = 0;
+            var msgClientTime = 0;
+            var headerSize = 1;
+            if (type != MSG_IN_MAP)  {
+                headerSize = 9;
+                if (dataView.byteLength < 2) {
+                    console.log(type);
                 }
-                switch (type) {
-                case MSG_IN_MAP: // map update
-                    if (mapSet) {
-                        newMapBitmap = new DataView(evt.data, headerSize); 
-                        newMapBitmap = dearchive(newMapBitmap);
-                        render.updateMapCanvasBack(newMapBitmap);
-                        var newMapTimeStart = performance.now();
-                        newMapBitmapFadeInIntervalID = setInterval(function () {
-                            var elapsed = performance.now() - newMapTimeStart;
-                            var percentDone = elapsed/(NEWMAP_TIMEOUT * 1.7);
-                            render.bgImageBack.alpha = percentDone;
-                        }, 50);
-                    } else {
-                        mapSet = true;
-                        mapBitmap = new DataView(evt.data, headerSize); 
-                        mapBitmap = dearchive(mapBitmap);
-                        render.updateMapCanvas(mapBitmap);
+                msgServerTime = dataView.getFloat64(1, true);
+                if (firstMessageServerTime < 0) {
+                    firstMessageServerTime = msgServerTime;
+                    firstMessageClientTime = performance.now();
+                }
+                msgClientTime = firstMessageClientTime + (msgServerTime - firstMessageServerTime);
+            }
+            switch (type) {
+            case MSG_IN_MAP: // map update
+                if (mapSet) {
+                    newMapBitmap = new DataView(evt.data, headerSize); 
+                    newMapBitmap = dearchive(newMapBitmap);
+                    render.updateMapCanvasBack(newMapBitmap);
+                    var newMapTimeStart = performance.now();
+                    newMapBitmapFadeInIntervalID = setInterval(function () {
+                        var elapsed = performance.now() - newMapTimeStart;
+                        var percentDone = elapsed/(NEWMAP_TIMEOUT * 1.7);
+                        render.bgImageBack.alpha = percentDone;
+                    }, 50);
+                } else {
+                    mapSet = true;
+                    mapBitmap = new DataView(evt.data, headerSize); 
+                    mapBitmap = dearchive(mapBitmap);
+                    render.updateMapCanvas(mapBitmap);
+                }
+                break;
+            case MSG_IN_MAP_CHANGE:
+                if (messageByteView[headerSize] == 1) {
+                    spaceMode = true;
+                    for (var id in bullets) {
+                        render.stage.removeChild(bullets[id].shape);
                     }
-                    break;
-                case MSG_IN_MAP_CHANGE:
-                    if (messageByteView[headerSize] == 1) {
-                        spaceMode = true;
-                        for (var id in bullets) {
-                            render.stage.removeChild(bullets[id].shape);
+                    bullets = {};
+                    var slideDownOldMap = function () {
+                        if (spaceMode) {
+                            render.bgImage.alpha -= 0.1;
+                            setTimeout(slideDownOldMap, 100);
                         }
-                        bullets = {};
-                        var slideDownOldMap = function () {
-                            if (spaceMode) {
-                                render.bgImage.alpha -= 0.1;
-                                setTimeout(slideDownOldMap, 100);
-                            }
-                        }
-                        setTimeout(slideDownOldMap, 1);
-                    } else {
-                        spaceMode = false;
-                        mapBitmap = newMapBitmap;
-                        if (newMapBitmapFadeInIntervalID) {
-                            newMapBitmapFadeInIntervalID = clearInterval(
-                                newMapBitmapFadeInIntervalID);
-                        }
-                        render.swapBgImage();
                     }
-                    break;
-                case MSG_IN_STATE:
-                    var clientsNum = messageByteView[headerSize];
-                    var numItemsPerTank = 7;
-                    var messageView = new Int32Array(evt.data.slice(headerSize + 1));
-                    for (var i = 0; i < clientsNum; i++) {
-                        var clientId = messageView[i*numItemsPerTank];
-                        var tankClientX = messageView[i*numItemsPerTank + 1];
-                        var tankClientY = messageView[i*numItemsPerTank + 2];
-                        var tankClientHp = messageView[i*numItemsPerTank + 3];
-                        var tankGunAngle = messageView[i*numItemsPerTank + 4];
-                        var shieldInfo = messageView[i*numItemsPerTank + 5];
-                        var shield = shieldInfo >> 24;
-                        var shieldPercent = (shieldInfo & 0xFF)/255;
-                        var direction = messageView[i*numItemsPerTank + 6];
-                        if (!tanks[clientId]) {
-                            tanks[clientId] =
-                                new Tank(tankClientX,
-                                    tankClientY,
-                                    tankClientHp,
-                                    tankGunAngle,
-                                    shield,
-                                    shieldPercent,
-                                    direction,
-                                    clientId);
-                        } else {
-                            tanks[clientId].updateState(
-                                tankClientX,
+                    setTimeout(slideDownOldMap, 1);
+                } else {
+                    spaceMode = false;
+                    mapBitmap = newMapBitmap;
+                    if (newMapBitmapFadeInIntervalID) {
+                        newMapBitmapFadeInIntervalID = clearInterval(
+                            newMapBitmapFadeInIntervalID);
+                    }
+                    render.swapBgImage();
+                }
+                break;
+            case MSG_IN_STATE:
+                var clientsNum = messageByteView[headerSize];
+                var numItemsPerTank = 7;
+                var messageView = new Int32Array(evt.data.slice(headerSize + 1));
+                for (var i = 0; i < clientsNum; i++) {
+                    var clientId = messageView[i*numItemsPerTank];
+                    var tankClientX = messageView[i*numItemsPerTank + 1];
+                    var tankClientY = messageView[i*numItemsPerTank + 2];
+                    var tankClientHp = messageView[i*numItemsPerTank + 3];
+                    var tankGunAngle = messageView[i*numItemsPerTank + 4];
+                    var shieldInfo = messageView[i*numItemsPerTank + 5];
+                    var shield = shieldInfo >> 24;
+                    var shieldPercent = (shieldInfo & 0xFF)/255;
+                    var direction = messageView[i*numItemsPerTank + 6];
+                    if (!tanks[clientId]) {
+                        tanks[clientId] =
+                            new Tank(tankClientX,
                                 tankClientY,
                                 tankClientHp,
                                 tankGunAngle,
                                 shield,
                                 shieldPercent,
-                                direction);
-                        }
-                    }
-                    break;
-                case MSG_IN_LEADERBOARD:
-                    var clientsNum = dataView.getUint32(headerSize, true);
-                    var leaderboard = new Array(clientsNum);
-                    var p = headerSize + 4;
-                    for (var i = 0; i < clientsNum; i++) {
-                        var id = dataView.getUint32(p, true);
-                        var sessionFrags = dataView.getUint32(p + 4, true);
-                        var lifeFrags = dataView.getUint32(p + 8, true);
-                        var nameLen = dataView.getUint8(p + 12);
-                        var nameView = new DataView(evt.data, p + 13, nameLen);
-                        var name = utf8decoder.decode(nameView);
-                        if (tanks[id]) {
-                            tanks[id].updateName(name, lifeFrags);
-                        }
-                        leaderboard[i] = new LeaderboardEntry(id, name, lifeFrags);
-                        p += 13 + nameLen;
-                    }
-                    updateLeaderboard(leaderboard);
-                    break;
-                case MSG_IN_GREETING:
-                    myClientId = dataView.getUint32(headerSize, true);
-                    console.log("I am " + myClientId);
-                    break;
-                case MSG_IN_BULLET_CREATE:
-                    var id = dataView.getUint32(headerSize, true);
-                    var ownerId = dataView.getUint32(headerSize + 4, true);
-                    var x = dataView.getFloat32(headerSize + 8, true);
-                    var y = dataView.getFloat32(headerSize + 12, true);
-                    var vx = dataView.getFloat32(headerSize + 16, true);
-                    var vy = dataView.getFloat32(headerSize + 20, true);
-                    bullets[id] = new Bullet(id, ownerId, x, y, vx, vy, msgClientTime);
-                    break;
-                case MSG_IN_TAKABLE_STATE:
-                    var takablesNum = dataView.getUint8(headerSize);
-                    var numItemsPerTakable = 22;
-                    for (var i = 0; i < takablesNum; i++) {
-                        var id = dataView.getUint32(headerSize + i*takablesNum + 1, true);
-                        var x = dataView.getUint32(headerSize + i*takablesNum + 1 + 4, true);
-                        var y = dataView.getUint32(headerSize + i*takablesNum + 1 + 8, true);
-                        var vx = dataView.getFloat32(headerSize + i*takablesNum + 1 + 12, true);
-                        var vy = dataView.getFloat32(headerSize + i*takablesNum + 1 + 16, true);
-                        var type = dataView.getUint8(headerSize + i*takablesNum + 1 + 20, true);
-                        var value = dataView.getUint8(headerSize + i*takablesNum + 1 + 21, true);
-                        if (typeof(takables[id]) === 'undefined') {
-                            takables[id] = new Takable(id, x, y, vx, vy, type, value);
-                            console.log("Takable", x, y, vx, vy, type, value);
-                        } else {
-                            takables[id].updateState(x, y);
-                            console.log(x, y);
-                        }
-                    }
-                    break;
-                case MSG_IN_DEATH:
-                    var messageData = new Int32Array(evt.data.slice(headerSize));
-                    var deadId = messageData[0];
-                    var x = messageData[1];
-                    var y = messageData[2];
-                    var radius = messageData[3];
-                    // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
-                    if (radius > 0 && !spaceMode) {
-                        if (!mapBitmap) {
-                            // TODO: discover why?!
-                            console.log("BUG!")
-                        } else {
-                            explodeAt(mapBitmap, x, y, radius);
-                            if (radius > 20) {
-                                var explosion = new createjs.Bitmap("/explosion5.png");
-                                explosion.scaleX = 0.1;
-                                explosion.scaleY = 0.1;
-                                explosion.x = x;
-                                explosion.y = y;
-                                explosion.rotation = Math.random() * 360;
-                                render.stage.addChild(explosion);
-                                explosion.regX = 64;
-                                explosion.regY = 64;
-                                var maxScale = radius / 64;
-                                var animateExplosion = function () {
-                                    if (explosion.scaleX < maxScale) {
-                                        explosion.scaleX += maxScale*0.4;
-                                        explosion.scaleY += maxScale*0.4;
-                                        if (explosion.scaleX > maxScale) {
-                                            explosion.scaleX = maxScale;
-                                            explosion.scaleY = maxScale;
-                                        }
-                                        setTimeout(animateExplosion, 100);
-                                    } else {
-                                        render.stage.removeChild(explosion);
-                                    }
-                                }
-                                animateExplosion();
-                            }
-                        }
-                    }
-                    if (tanks.hasOwnProperty(deadId)) {
-                        tanks[deadId].destroy();
-                        if (deadId == myClientId) {
-                            inputState.shootPower = 0;
-                            inputState.jumpPower = 0;
-                            showLogin(tanks[deadId].lifeFrags);
-                        }
-                        delete tanks[deadId];
-                    } else if (bullets.hasOwnProperty(deadId)) {
-                        var bullet = bullets[deadId];
-                        render.stage.removeChild(bullet.shape);
-                        delete bullets[deadId];
+                                direction,
+                                clientId);
+                    } else {
+                        tanks[clientId].updateState(
+                            tankClientX,
+                            tankClientY,
+                            tankClientHp,
+                            tankGunAngle,
+                            shield,
+                            shieldPercent,
+                            direction);
                     }
                 }
-            };
+                break;
+            case MSG_IN_LEADERBOARD:
+                var clientsNum = dataView.getUint32(headerSize, true);
+                var leaderboard = new Array(clientsNum);
+                var p = headerSize + 4;
+                for (var i = 0; i < clientsNum; i++) {
+                    var id = dataView.getUint32(p, true);
+                    var sessionFrags = dataView.getUint32(p + 4, true);
+                    var lifeFrags = dataView.getUint32(p + 8, true);
+                    var nameLen = dataView.getUint8(p + 12);
+                    var nameView = new DataView(evt.data, p + 13, nameLen);
+                    var name = utf8decoder.decode(nameView);
+                    if (tanks[id]) {
+                        tanks[id].updateName(name, lifeFrags);
+                    }
+                    leaderboard[i] = new LeaderboardEntry(id, name, lifeFrags);
+                    p += 13 + nameLen;
+                }
+                updateLeaderboard(leaderboard);
+                break;
+            case MSG_IN_GREETING:
+                myClientId = dataView.getUint32(headerSize, true);
+                console.log("I am " + myClientId);
+                break;
+            case MSG_IN_BULLET_CREATE:
+                var id = dataView.getUint32(headerSize, true);
+                var ownerId = dataView.getUint32(headerSize + 4, true);
+                var x = dataView.getFloat32(headerSize + 8, true);
+                var y = dataView.getFloat32(headerSize + 12, true);
+                var vx = dataView.getFloat32(headerSize + 16, true);
+                var vy = dataView.getFloat32(headerSize + 20, true);
+                bullets[id] = new Bullet(id, ownerId, x, y, vx, vy, msgClientTime);
+                break;
+            case MSG_IN_TAKABLE_STATE:
+                var takablesNum = dataView.getUint8(headerSize);
+                var numItemsPerTakable = 22;
+                for (var i = 0; i < takablesNum; i++) {
+                    var id = dataView.getUint32(headerSize + i*takablesNum + 1, true);
+                    var x = dataView.getUint32(headerSize + i*takablesNum + 1 + 4, true);
+                    var y = dataView.getUint32(headerSize + i*takablesNum + 1 + 8, true);
+                    var vx = dataView.getFloat32(headerSize + i*takablesNum + 1 + 12, true);
+                    var vy = dataView.getFloat32(headerSize + i*takablesNum + 1 + 16, true);
+                    var type = dataView.getUint8(headerSize + i*takablesNum + 1 + 20, true);
+                    var value = dataView.getUint8(headerSize + i*takablesNum + 1 + 21, true);
+                    if (typeof(takables[id]) === 'undefined') {
+                        takables[id] = new Takable(id, x, y, vx, vy, type, value);
+                        console.log("Takable", x, y, vx, vy, type, value);
+                    } else {
+                        takables[id].updateState(x, y);
+                    }
+                }
+                break;
+            case MSG_IN_DEATH:
+                var messageData = new Int32Array(evt.data.slice(headerSize));
+                var deadId = messageData[0];
+                var x = messageData[1];
+                var y = messageData[2];
+                var radius = messageData[3];
+                // console.log(deadId + " died at " + x + ", " + y + " with r=" + radius);
+                if (radius > 0 && !spaceMode) {
+                    if (!mapBitmap) {
+                        // TODO: discover why?!
+                        console.log("BUG!")
+                    } else {
+                        explodeAt(mapBitmap, x, y, radius);
+                        if (radius > 20) {
+                            var explosion = new createjs.Bitmap("/explosion5.png");
+                            explosion.scaleX = 0.1;
+                            explosion.scaleY = 0.1;
+                            explosion.x = x;
+                            explosion.y = y;
+                            explosion.rotation = Math.random() * 360;
+                            render.stage.addChild(explosion);
+                            explosion.regX = 64;
+                            explosion.regY = 64;
+                            var maxScale = radius / 64;
+                            var animateExplosion = function () {
+                                if (explosion.scaleX < maxScale) {
+                                    explosion.scaleX += maxScale*0.4;
+                                    explosion.scaleY += maxScale*0.4;
+                                    if (explosion.scaleX > maxScale) {
+                                        explosion.scaleX = maxScale;
+                                        explosion.scaleY = maxScale;
+                                    }
+                                    setTimeout(animateExplosion, 100);
+                                } else {
+                                    render.stage.removeChild(explosion);
+                                }
+                            }
+                            animateExplosion();
+                        }
+                    }
+                }
+                if (tanks.hasOwnProperty(deadId)) {
+                    tanks[deadId].destroy();
+                    if (deadId == myClientId) {
+                        inputState.shootPower = 0;
+                        inputState.jumpPower = 0;
+                        showLogin(tanks[deadId].lifeFrags);
+                    }
+                    delete tanks[deadId];
+                } else if (bullets.hasOwnProperty(deadId)) {
+                    var bullet = bullets[deadId];
+                    render.stage.removeChild(bullet.shape);
+                    delete bullets[deadId];
+                }
+            }
+        };
 
-            setInterval(function() { // Sending packets to server
-                  var messageBuffer = new ArrayBuffer(6);
-                  var dataView = new DataView(messageBuffer);
-                  dataView.setUint8(0, MSG_OUT_MOVING);
-                  dataView.setUint8(1, inputState.wasMoving);
-                  if (inputState.wasChangingAngle == 0 &&
-                      inputState.changingAngle != 0) {
-                      inputState.wasChangingAngle = scaleTimeToByte(inputState.changingAngle, inputState.startChangingAngle, 200);
-                  }
-                  dataView.setUint8(2, inputState.wasChangingAngle);
-                  if (conn.readyState === conn.OPEN) {
-                      conn.send(dataView);
-                  } else {
-                      //console.log("Still waiting for the conn to be established");
-                  }
-                  inputState.startChangingAngle = performance.now();
-                  inputState.wasChangingAngle = 0;
-                  inputState.wasMoving = inputState.moving;
-            }, 200);
-
-        } else {
-            var item = document.createElement("div");
-            body.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-            return;
-        }
+        setInterval(function() { // Sending packets to server
+              var messageBuffer = new ArrayBuffer(6);
+              var dataView = new DataView(messageBuffer);
+              dataView.setUint8(0, MSG_OUT_MOVING);
+              dataView.setUint8(1, inputState.wasMoving);
+              if (inputState.wasChangingAngle == 0 &&
+                  inputState.changingAngle != 0) {
+                  inputState.wasChangingAngle = scaleTimeToByte(inputState.changingAngle, inputState.startChangingAngle, 200);
+              }
+              dataView.setUint8(2, inputState.wasChangingAngle);
+              if (conn.readyState === conn.OPEN) {
+                  conn.send(dataView);
+              } else {
+                  //console.log("Still waiting for the conn to be established");
+              }
+              inputState.startChangingAngle = performance.now();
+              inputState.wasChangingAngle = 0;
+              inputState.wasMoving = inputState.moving;
+        }, 200);
     }
 
     function getPower(timeStart, speed) {
@@ -805,7 +796,59 @@ window.onload = function () {
         return s/xs.length;
     }
 
-    connectToGameServer(window.location.host);
+    var connectToOverlord = function (overlordHost, clb) {
+        var overlordWSUrl = "ws://" + overlordHost + "/ws";
+        var overlordConn = new WebSocket(overlordWSUrl);
+        overlordConn.binaryType = "arraybuffer";
+        overlordConn.onclose = function (evt) {
+            console.log("Overlord connection closed.")
+        };
+        overlordConn.onerror = function (evt) {
+            console.log("Connection to overlord failed, retrying.");
+            console.log(evt);
+            connectToOverlord(overlordHost, clb)
+        };
+        overlordConn.onmessage = function (evt) {
+            if (evt.data instanceof ArrayBuffer) {
+                // TODO: ping handler
+            } else {
+                console.log("Server list received from overlord");
+                var lines = evt.data.split('\n');
+                var bestServer = null, bestPlayers = -1;
+                for (var i = 0; i < lines.length; ++i) {
+                    var fields = lines[i].split('\t');
+                    var players = Number(fields[1]);
+                    if (players > bestPlayers) {
+                        bestServer = fields[0];
+                    }
+                }
+                if (bestServer == null) {
+                    console.log("No best server, retrying");
+                    setTimeout(function () {
+                        // reask for server list
+                        var messageBuffer = new ArrayBuffer(1);
+                        overlordConn.send(messageBuffer)
+                    }, 500);
+                } else {
+                    console.log("Best server determined: " + bestServer);
+                    overlordConn.close();
+                    clb(bestServer);
+                }
+            }
+        };
+        overlordConn.onopen = function () {
+            console.log("Overlord connection open");
+            var messageBuffer = new ArrayBuffer(1);
+            overlordConn.send(messageBuffer)
+        };
+    }
+
+    var startConnectionPipeline = function () {
+        connectToOverlord(overlord, function (bestServer) {
+            connectToGameServer(bestServer);
+        });
+    };
+    startConnectionPipeline();
 };
 
 function onPlayButtonClicked () {

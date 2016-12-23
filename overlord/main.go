@@ -9,6 +9,8 @@ import "sync"
 import "net/http"
 import "net/url"
 import "strconv"
+import "bytes"
+import "github.com/gorilla/websocket"
 
 type Host struct {
     updated time.Time
@@ -64,11 +66,75 @@ func serveUpdate(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+const MESSAGE_QUEUE_SIZE = 256
+const PONG_TIMEOUT = 10 * time.Second
+const WRITE_TIMEOUT = 5 * time.Second
+const PING_PERIOD = 1 * time.Second
+
+func serveWebsocket(w http.ResponseWriter, r *http.Request) {
+    var upgrader = websocket.Upgrader{
+        ReadBufferSize:  1024,
+        WriteBufferSize: 1024,
+        CheckOrigin: func(r *http.Request) bool { return true },
+    }
+
+    log.Println("New WebSocket connection request.")
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        http.Error(w, "Method not allowed", 405)
+		log.Println(err)
+		return
+	}
+    defer conn.Close()
+
+    conn.SetReadLimit(MESSAGE_QUEUE_SIZE)
+    go func () {
+        defer conn.Close()
+        delayReadDeadline := func () { conn.SetReadDeadline(time.Now().Add(PONG_TIMEOUT)) }
+        conn.SetPongHandler(func(payload string) error { delayReadDeadline(); return nil; })
+        delayReadDeadline()
+        for {
+            _, message, err := conn.ReadMessage()
+            if err != nil {
+                break
+            }
+            if message[0] == 80 { // MSG_OUT_PING
+                conn.WriteMessage(websocket.BinaryMessage, message)
+            } else if message[0] == 0 { // LIST
+                listMessage := buildListMessage()
+                conn.WriteMessage(websocket.TextMessage, listMessage)
+            }
+        }
+    }()
+
+    pingTicker := time.NewTicker(PING_PERIOD)
+    defer pingTicker.Stop()
+    for {
+        <-pingTicker.C
+        conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
+        err := conn.WriteMessage(websocket.PingMessage, []byte{})
+        if err != nil {
+            return
+        }
+    }
+}
+
+func buildListMessage() []byte {
+    buffer := bytes.Buffer{}
+    hostmapMutex.Lock()
+    defer hostmapMutex.Unlock()
+    for url, host := range hostmap {
+        buffer.WriteString(fmt.Sprintf("%s\t%d\n", url, host.players))
+    }
+    return buffer.Bytes()
+}
+
 func main() {
     var addr = flag.String("addr", ":7070", "http service address")
     flag.Parse()
     rand.Seed(time.Now().UTC().UnixNano())
     http.HandleFunc("/list", serveList)
     http.HandleFunc("/update", serveUpdate)
+    http.HandleFunc("/ws", serveWebsocket)
     http.ListenAndServe(*addr, nil)
 }

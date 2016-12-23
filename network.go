@@ -61,9 +61,10 @@ func updateOverlord(players int) {
     reqUrl := fmt.Sprintf("http://%s/update?url=ws://%s/ws&players=%d", *overlord, *addr, players)
     resp, err := http.Get(reqUrl)
     if err != nil {
-        log.Printf("Error updaring overlord: %s", err)
+        log.Printf("Error updating overlord: %s", err)
+    } else {
+        resp.Body.Close()
     }
-    resp.Body.Close()
 }
 
 // Represents a single client. Should be allocated in heap
@@ -88,9 +89,11 @@ type Message struct {
 
 func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     // This will be called in a pre-connection goroutine.
+    // NOTE(vbo): ignore origin mismatch.
     var upgrader = websocket.Upgrader{
         ReadBufferSize:  1024,
         WriteBufferSize: 1024,
+        CheckOrigin: func(r *http.Request) bool { return true },
     }
 
     // Upgrade HTTP connection to WebSocket
