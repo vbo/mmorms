@@ -15,9 +15,15 @@ import (
   "golang.org/x/image/bmp"
 )
 
-type Tank struct {
+type Movable struct {
     x, y float64
     vx, vy float64
+    id uint32
+    ownerId uint32
+    objectType byte
+    collidable bool
+
+    // Tank properties
     moving int8
     jumping bool
     gunAngle float64
@@ -29,20 +35,10 @@ type Tank struct {
     shieldFlipTime time.Time
 }
 
-type Bullet struct {
-    id uint32
-    ownerId uint32
-    x, y float64
-    vx, vy float64
-}
-
-type Takable struct {
-    id uint32
-    x, y float64
-    vx, vy float64
-    objectType int8
-    objectValue int8
-}
+const (
+    TYPE_TANK = 0
+    TYPE_BULLET = 1
+)
 
 const EXPLOSION_DMG = 70
 const EXPLOSION_DMG_FALLOFF = 2
@@ -76,10 +72,6 @@ const HEIGHT = 620
 const CLIENT_ACTIVITY_TIMEOUT = 5 * time.Second
 
 const (
-    TAKABLE_HP = 0
-)
-
-const (
     MSG_OUT_MAP = 0
     MSG_OUT_STATE = 1
     MSG_OUT_GREETING = 2
@@ -87,7 +79,6 @@ const (
     MSG_OUT_LEADERBOARD = 5
     MSG_OUT_MAP_CHANGE = 6
     MSG_OUT_BULLET_CREATED = 7
-    MSG_OUT_TAKABLE_STATE = 8
     MSG_OUT_PING = 80
 )
 const MSG_HEADER_SIZE = 1 + 8
@@ -117,8 +108,12 @@ var MAP_FILES = []string{
 
 var MAPS_LOADED = make([]image.Image, len(MAP_FILES))
 
-func NewTank() *Tank {
-    return &Tank{
+func NewTank(net *Network, ownerId uint32) *Movable {
+    return &Movable {
+        id: net.GetNewObjectId(),
+        ownerId: ownerId,
+        collidable: true,
+        objectType: TYPE_TANK,
         x: float64(TANK_WIDTH/2 + rand.Intn(WIDTH - TANK_WIDTH/2)),
         y: 50,
         direction: 1,
@@ -147,8 +142,8 @@ func generateMapBitmap(mapBitmap []byte) int {
     return c
 }
 
-func simulateWorldInSpace(tanks map[uint32]*Tank,
-                          newTanksPos map[uint32]float64,
+func simulateWorldInSpace(tanks map[uint32]*Movable,
+                          newMovablesPos map[uint32]float64,
                           dtTotalSeconds float64,
                           frameStartTime time.Time,
                           spaceStartTime time.Time) int {
@@ -156,9 +151,9 @@ func simulateWorldInSpace(tanks map[uint32]*Tank,
     dt := targetTime.Sub(frameStartTime)
     numFinished :=  0
     for id, tank := range tanks {
-        ds := newTanksPos[id] - tank.y
+        ds := newMovablesPos[id] - tank.y
         if dt <= 0 {
-            tank.y = newTanksPos[id]
+            tank.y = newMovablesPos[id]
             numFinished++
         } else {
             v := ds / dt.Seconds()
@@ -183,8 +178,8 @@ func outOfScreenY(y float64, vy float64) bool {
 }
 
 func simulateWorld(
-    tanks map[uint32]*Tank,
-    bulletsIn *[]Bullet,
+    tanks map[uint32]*Movable,
+    bulletsIn *[]Movable,
     mapBitmap []byte,
     dtTotalSeconds float64,
     startTime time.Time,
@@ -281,7 +276,7 @@ func simulateWorld(
                     coordToPixel(bullet.y),
                     BULLET_RAD,
                     mapBitmap) ||
-                isPointInTank(
+                isPointInMovable(
                     coordToPixel(bullet.x),
                     coordToPixel(bullet.y),
                     tanks,
@@ -338,8 +333,8 @@ var newMapBitmapPixelCount = 0
 
 func gameLoop(net *Network) {
     clients := make(map[uint32]*Client)
-    tanks := make(map[uint32]*Tank)
-    bullets := make([]Bullet, 0, 320)
+    tanks := make(map[uint32]*Movable)
+    bullets := make([]Movable, 0, 320)
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
@@ -355,7 +350,7 @@ func gameLoop(net *Network) {
     var newMapBitmapArchive []byte
     var spaceStartTime time.Time
     spaceMode := false
-    var newTanksPos map[uint32]float64
+    var newMovablesPos map[uint32]float64
 
     // TODO(vbo): load from predesigned file?
     // TODO(vbo): we need precomputed surface normals for:
@@ -435,7 +430,7 @@ func gameLoop(net *Network) {
             }
             //log.Println("Map & greetings sent")
             if !client.observer {
-                tanks[client.id] = NewTank()
+                tanks[client.id] = NewTank(net, client.id)
             }
 
         case client := <-net.disconnect:
@@ -535,13 +530,15 @@ func gameLoop(net *Network) {
                             id := net.GetNewObjectId()
                             x := tank.x + TANK_GUN_LENGTH * aimX
                             y := tank.y - TANK_TOWER_HEIGHT * (1 - aimY)
-                            bullet := Bullet{
+                            bullet := Movable{
                                 id: id,
                                 ownerId: client.id,
                                 x: x,
                                 y: y,
                                 vx: vx,
                                 vy: vy,
+                                objectType: TYPE_BULLET,
+                                collidable: true,
                             }
                             bullets = append(bullets, bullet)
                             messageBuffer := createMsg(MSG_OUT_BULLET_CREATED, startTime, 4*6);
@@ -586,9 +583,9 @@ func gameLoop(net *Network) {
                                 log.Printf("%s joined", string(client.name))
                             }
                             client.lifeFrags = 0
-                            tanks[client.id] = NewTank()
+                            tanks[client.id] = NewTank(net, client.id)
                             if spaceMode {
-                                newTanksPos = getNewTanksPos(tanks, newMapBitmap[1:])
+                                newMovablesPos = getNewMovablesPos(tanks, newMapBitmap[1:])
                             }
                         }
 
@@ -615,19 +612,19 @@ func gameLoop(net *Network) {
                 /* TODO(vbo): remove */ clients,
                 &numGroundDestroyed)
         } else {
-            if (newTanksPos == nil) {
+            if (newMovablesPos == nil) {
                 log.Println("New tank pos calc start")
-                newTanksPos = getNewTanksPos(tanks, newMapBitmap[1:])
+                newMovablesPos = getNewMovablesPos(tanks, newMapBitmap[1:])
                 log.Println("New tank pos calc done")
             }
             finished := simulateWorldInSpace(
                 tanks,
-                newTanksPos,
+                newMovablesPos,
                 dtTotalSeconds,
                 startTime,
                 spaceStartTime)
             if finished == len(tanks) {
-                newTanksPos = nil
+                newMovablesPos = nil
                 spaceMode = false
                 copy(mapBitmapBuffer[1:], newMapBitmap[1:])
                 mapBitmapPixelCount = newMapBitmapPixelCount
@@ -645,7 +642,7 @@ func gameLoop(net *Network) {
         }
 
         // Broadcast world snapshot
-        broadcastTanks(tanks, clients, startTime)
+        broadcastMovables(tanks, clients, startTime)
         broadcastLeaderboard(clients, startTime)
 
         if newMapBitmap == nil && numGroundDestroyed > int(float64(mapBitmapPixelCount) * DESTROYED_FRACTION_TO_SPACE) {
@@ -672,7 +669,7 @@ func gameLoop(net *Network) {
     }
 }
 
-func getNewTanksPos(tanks map[uint32]*Tank, newMap []byte) map[uint32]float64 {
+func getNewMovablesPos(tanks map[uint32]*Movable, newMap []byte) map[uint32]float64 {
     result := make(map[uint32]float64)
     for id, tank := range(tanks) {
         y := tank.y
@@ -759,7 +756,7 @@ func broadcastLeaderboard(clients map[uint32]*Client, startTime time.Time) {
     }
 }
 
-func broadcastTanks(tanks map[uint32]*Tank, clients map[uint32]*Client, startTime time.Time) {
+func broadcastMovables(tanks map[uint32]*Movable, clients map[uint32]*Client, startTime time.Time) {
     // TODO:(vbo): scratch memory arena reuse ideas:
     //  - Under normal load we expect any send operation
     //    to be finished after no more than N server ticks.
@@ -823,7 +820,7 @@ func explodeAt(cx int32,
                cy int32,
                r int32,
                mapBitmap []byte,
-               tanks map[uint32]*Tank,
+               tanks map[uint32]*Movable,
                clients map[uint32]*Client,
                owner *Client,
                numGroundDestroyed *int) {
@@ -881,7 +878,7 @@ func explodeAt(cx int32,
     }
 }
 
-func isPointInTank(cx int32, cy int32, tanks map[uint32]*Tank, ownerId uint32) bool {
+func isPointInMovable(cx int32, cy int32, tanks map[uint32]*Movable, ownerId uint32) bool {
     for clientId, tank := range tanks {
         x := int32(tank.x)
         y := int32(tank.y)
