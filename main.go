@@ -185,7 +185,6 @@ func outOfScreenY(y float64, vy float64) bool {
 func simulateWorld(
     tanks map[uint32]*Tank,
     bulletsIn *[]Bullet,
-    takablesIn *[]Takable,
     mapBitmap []byte,
     dtTotalSeconds float64,
     startTime time.Time,
@@ -193,7 +192,6 @@ func simulateWorld(
     numGroundDestroyed *int) {
 
     bullets := *bulletsIn
-    takables := *takablesIn
     for dtTotalSeconds > 0.0 {
         dt := math.Min(0.005, dtTotalSeconds)
         dtTotalSeconds = dtTotalSeconds - dt
@@ -318,11 +316,6 @@ func simulateWorld(
             }
         }
 
-        takableIndex := 0
-        for takableIndex < len(takables) {
-            // TODO(levvy): same physics as applied to tanks + tank intersection
-            takableIndex++
-        }
 
         for tankID, tank := range tanks {
             if tank.hp == 0 {
@@ -347,7 +340,6 @@ func gameLoop(net *Network) {
     clients := make(map[uint32]*Client)
     tanks := make(map[uint32]*Tank)
     bullets := make([]Bullet, 0, 320)
-    takables := make([]Takable, 0)
     mapBitmapBuffer := make([]byte, WIDTH * HEIGHT + 1)
     mapBitmapBuffer[0] = MSG_OUT_MAP
     mapBitmap := mapBitmapBuffer[1:]
@@ -402,20 +394,6 @@ func gameLoop(net *Network) {
                 }
             }
             updateOverlord(playerCount)
-        }
-
-        // adding takables
-        if len(takables) < 1 {
-            takable := Takable{
-                id: net.GetNewObjectId(),
-                x: float64(TANK_WIDTH/2 + rand.Intn(WIDTH - TANK_WIDTH/2)),
-                y: 50,
-                vx: 0,
-                vy: 0,
-                objectType: TAKABLE_HP,
-                objectValue: 25,
-            }
-            takables = append(takables, takable)
         }
 
         // writing stats
@@ -631,7 +609,6 @@ func gameLoop(net *Network) {
         if !spaceMode {
             simulateWorld(tanks,
                 &bullets,
-                &takables,
                 mapBitmap,
                 dtTotalSeconds,
                 startTime,
@@ -668,7 +645,6 @@ func gameLoop(net *Network) {
         }
 
         // Broadcast world snapshot
-        broadcastTakables(takables, clients, startTime)
         broadcastTanks(tanks, clients, startTime)
         broadcastLeaderboard(clients, startTime)
 
@@ -780,26 +756,6 @@ func broadcastLeaderboard(clients map[uint32]*Client, startTime time.Time) {
     }
     for _, client := range clients {
         client.outgoing <- messageBuffer
-    }
-}
-
-
-func broadcastTakables(takables []Takable, clients map[uint32]*Client, startTime time.Time) {
-    stateMessageBuffer := createMsg(MSG_OUT_TAKABLE_STATE, startTime, 1 + len(takables) * 22)
-    stateMessageBuffer[MSG_HEADER_SIZE] = byte(len(takables))
-    message := stateMessageBuffer[MSG_HEADER_SIZE + 1:]
-    for id, takable := range takables {
-        binary.LittleEndian.PutUint32(message[0:], uint32(id))
-        binary.LittleEndian.PutUint32(message[4:], uint32(takable.x))
-        binary.LittleEndian.PutUint32(message[8:], uint32(takable.y))
-        binary.LittleEndian.PutUint32(message[12:], math.Float32bits(float32(takable.vx)))
-        binary.LittleEndian.PutUint32(message[16:], math.Float32bits(float32(takable.vy)))
-        message[20] = byte(takable.objectType)
-        message[21] = byte(takable.objectValue)
-        message = message[22:]
-    }
-    for _, client := range clients {
-        client.outgoing <- stateMessageBuffer
     }
 }
 

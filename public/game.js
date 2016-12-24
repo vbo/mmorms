@@ -34,7 +34,6 @@ window.onload = function () {
     var MSG_IN_LEADERBOARD = 5;
     var MSG_IN_MAP_CHANGE = 6;
     var MSG_IN_BULLET_CREATE = 7;
-    var MSG_IN_TAKABLE_STATE = 8;
 
     var MSG_OUT_MOVING = 0;
     var MSG_OUT_SHOOTING = 1;
@@ -80,7 +79,6 @@ window.onload = function () {
     var myClientId;
     var tanks = {};
     var bullets = {};
-    var takables = {};
     var mapBitmap;
     var newMapBitmap;
     var newMapBitmapFadeInIntervalID;
@@ -251,26 +249,6 @@ window.onload = function () {
     Tank.prototype.destroy = function() {
         render.stage.removeChild(this.shape);
         render.stage.removeChild(this.hpLabel);
-    }
-
-    function Takable (id, x, y, vx, vy, type, value) {
-        this.vx = vx;
-        this.vy = vy;
-        this.id = id;
-        this.type = type;
-        this.value = value;
-        this.shape = new createjs.Shape();
-        this.shape.graphics.beginFill("Blue").drawRect(-5, -5, 10, 10);
-        this.shape.x = x;
-        this.shape.y = y;
-        console.log(this.shape);
-        render.stage.addChild(this.shape);
-    }
-
-    Takable.prototype.updateState = function(x, y) {
-        // TODO: add interpolation
-        this.shape.x = x - 5;
-        this.shape.y = y - 5;
     }
 
     function Bullet (id, ownerId, x, y, vx, vy, creationTime) {
@@ -507,25 +485,6 @@ window.onload = function () {
                 var vx = dataView.getFloat32(headerSize + 16, true);
                 var vy = dataView.getFloat32(headerSize + 20, true);
                 bullets[id] = new Bullet(id, ownerId, x, y, vx, vy, msgClientTime);
-                break;
-            case MSG_IN_TAKABLE_STATE:
-                var takablesNum = dataView.getUint8(headerSize);
-                var numItemsPerTakable = 22;
-                for (var i = 0; i < takablesNum; i++) {
-                    var id = dataView.getUint32(headerSize + i*takablesNum + 1, true);
-                    var x = dataView.getUint32(headerSize + i*takablesNum + 1 + 4, true);
-                    var y = dataView.getUint32(headerSize + i*takablesNum + 1 + 8, true);
-                    var vx = dataView.getFloat32(headerSize + i*takablesNum + 1 + 12, true);
-                    var vy = dataView.getFloat32(headerSize + i*takablesNum + 1 + 16, true);
-                    var type = dataView.getUint8(headerSize + i*takablesNum + 1 + 20, true);
-                    var value = dataView.getUint8(headerSize + i*takablesNum + 1 + 21, true);
-                    if (typeof(takables[id]) === 'undefined') {
-                        takables[id] = new Takable(id, x, y, vx, vy, type, value);
-                        console.log("Takable", x, y, vx, vy, type, value);
-                    } else {
-                        takables[id].updateState(x, y);
-                    }
-                }
                 break;
             case MSG_IN_DEATH:
                 var messageData = new Int32Array(evt.data.slice(headerSize));
