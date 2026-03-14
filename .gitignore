@@ -1,2 +1,12 @@
 *.swp
 log.txt
+
+# Build outputs
+mmorms
+mmorms.exe
+overlord
+overlord.exe
+
+# Python
+__pycache__/
+*.py[cod]

@@ -755,7 +755,9 @@ window.onload = function () {
         return s/xs.length;
     }
 
-    var connectToOverlord = function (overlordHost, clb) {
+    var connectToOverlord = function (overlordHost, clb, retriesLeft) {
+        if (retriesLeft === undefined) retriesLeft = 2;
+        var fallbackGameUrl = "ws://" + window.location.host + "/ws";
         var overlordWSUrl = "ws://" + overlordHost + "/ws";
         var overlordConn = new WebSocket(overlordWSUrl);
         overlordConn.binaryType = "arraybuffer";
@@ -763,9 +765,14 @@ window.onload = function () {
             console.log("Overlord connection closed.")
         };
         overlordConn.onerror = function (evt) {
-            console.log("Connection to overlord failed, retrying.");
-            console.log(evt);
-            connectToOverlord(overlordHost, clb)
+            console.log("Connection to overlord failed.");
+            if (retriesLeft > 0) {
+                console.log("Retrying overlord...");
+                connectToOverlord(overlordHost, clb, retriesLeft - 1);
+            } else {
+                console.log("Using same host as game server: " + fallbackGameUrl);
+                clb(fallbackGameUrl);
+            }
         };
         overlordConn.onmessage = function (evt) {
             if (evt.data instanceof ArrayBuffer) {
