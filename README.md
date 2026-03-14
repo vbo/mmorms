@@ -4,12 +4,14 @@ A multiplayer real-time artillery tank game inspired by Worms. Play in your brow
 
 Play now: http://tankoids.vbo.name
 
-## Architecture
+![Tankoids screenshot](./public/screenshot.png)
+
+## Executables
 
 - **mmorms** — Game server (Go). Physics, WebSocket game logic, terrain destruction, bots, leaderboard. Serves the web client and game WebSocket.
 - **overlord** — Matchmaking server. Keeps a list of game servers and player counts. Clients connect to overlord first to pick the best server, then join the game.
 
-### Runtime (multi-server)
+### Runtime Logic
 
 ```mermaid
 sequenceDiagram
@@ -104,3 +106,17 @@ If the overlord is unavailable, the client falls back to connecting directly to 
 ├── run_prod.sh        # Production respawn script
 └── build_run.py, singlebox.py, cleanup.py  # Dev scripts
 ```
+
+
+## Dependencies
+
+### Go (go.mod)
+
+| Package | Version |
+|---------|---------|
+| `github.com/gorilla/websocket` | v1.5.0 |
+| `golang.org/x/image` | v0.17.0 |
+
+### Build / runtime
+
+- Go 1.22+, Python 3 (stdlib only, for scripts), Docker / Fly.io (for deployment, optional)
