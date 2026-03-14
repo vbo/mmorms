@@ -8,12 +8,13 @@ RUN CGO_ENABLED=0 go build -o overlord ./overlord
 
 # Build mmorms
 FROM golang:1.22-alpine AS mmorms-builder
+ARG VERSION=dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go network.go bot.go ./
 COPY botai/ ./botai/
-RUN CGO_ENABLED=0 go build -o mmorms .
+RUN CGO_ENABLED=0 go build -ldflags "-X main.buildVersion=${VERSION}" -o mmorms .
 
 # Runtime
 FROM alpine:latest

@@ -5,6 +5,7 @@
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
         <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"/>
         <script src="/vars.js"></script>
+        <script>window.addEventListener('DOMContentLoaded', function() { document.getElementById('versionDisplay').textContent = (typeof window.version !== 'undefined' ? window.version : 'dev'); });</script>
         <script src="/text-encoding/encoding-indexes.js"></script>
         <script src="/text-encoding/encoding.js"></script>
         <script src="/render.js"></script>
@@ -29,6 +30,7 @@
                         text-align: center;
                     ">
                     <h1>Tankoids.Online</h1>
+                    <p style="margin: -8px 0 8px 0; font-size: 14px; color: #666;">v<span id="versionDisplay">-</span></p>
                     <div id="finalScoreBlock" style="display: none; margin-bottom:16px; margin-top: -10px;">You scored <span id="lifeScore">12</span>.</div>
                     <div style="font-size: 24px;">
                         name: <input id="loginInput" style="font-size: 24px;"/>

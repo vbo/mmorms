@@ -12,9 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - run: flyctl deploy --remote-only
+      - name: Deploy to Fly
+        run: |
+          N=$(git rev-list --count HEAD)
+          VERSION=0.$((41 + N))
+          flyctl deploy --remote-only --build-arg VERSION=$VERSION
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
