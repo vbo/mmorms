@@ -1,3 +1,6 @@
+// Package main provides the mmorms network layer: HTTP server (static files,
+// vars.js, pprof), WebSocket game connections, overlord registration/update,
+// and optional /overlord proxy when running in embedded mode.
 package main
 
 import (

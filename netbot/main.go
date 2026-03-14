@@ -1,3 +1,6 @@
+// Package main runs standalone bot clients: dials a game server WebSocket,
+// spawns N bots using botai, and keeps them connected. Useful for load testing
+// or running bots from a separate process.
 package main
 
 import "log"

@@ -1,3 +1,6 @@
+// Package main implements the mmorms game server: the main game loop, physics
+// simulation (gravity, collision, projectiles), destructible terrain (map loading
+// from BMP, archiving, regeneration), tank movement/aiming/shooting, and bot spawning.
 package main
 
 import (
