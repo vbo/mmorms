@@ -1,1 +1,0 @@
-go install ../... && ./singlebox.sh
