@@ -1,16 +1,20 @@
 package main
 
-import "fmt"
-import "flag"
-import "log"
-import "math/rand"
-import "time"
-import "sync"
-import "net/http"
-import "net/url"
-import "strconv"
-import "bytes"
-import "github.com/gorilla/websocket"
+import (
+	"bytes"
+	"flag"
+	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
 
 type Host struct {
     updated time.Time
@@ -38,7 +42,7 @@ func serveUpdate(w http.ResponseWriter, r *http.Request) {
     q := r.URL.Query()
     hostUrl := q.Get("url")
     u, err := url.ParseRequestURI(hostUrl)
-    if err != nil || u.Scheme != "ws" || len(u.Host) < 1 {
+    if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || len(u.Host) < 1 {
         http.Error(w, "Bad request", 400)
         log.Printf("Invalid host url %s %s", hostUrl, err)
         return
@@ -132,6 +136,10 @@ func buildListMessage() []byte {
 func main() {
     var addr = flag.String("addr", ":7070", "http service address")
     flag.Parse()
+    port := os.Getenv("PORT")
+    if port != "" {
+        *addr = ":" + port
+    }
     rand.Seed(time.Now().UTC().UnixNano())
     http.HandleFunc("/list", serveList)
     http.HandleFunc("/update", serveUpdate)

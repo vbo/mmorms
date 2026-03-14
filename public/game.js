@@ -755,10 +755,13 @@ window.onload = function () {
         return s/xs.length;
     }
 
+    var wsProtocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+    var overlordPath = (typeof window.overlordPath !== 'undefined') ? window.overlordPath : '/ws';
     var connectToOverlord = function (overlordHost, clb, retriesLeft) {
         if (retriesLeft === undefined) retriesLeft = 2;
-        var fallbackGameUrl = "ws://" + window.location.host + "/ws";
-        var overlordWSUrl = "ws://" + overlordHost + "/ws";
+        var fallbackGameUrl = wsProtocol + "//" + window.location.host + "/ws";
+        var overlordBase = overlordHost ? (wsProtocol + "//" + overlordHost) : (wsProtocol + "//" + window.location.host);
+        var overlordWSUrl = overlordBase + overlordPath;
         var overlordConn = new WebSocket(overlordWSUrl);
         overlordConn.binaryType = "arraybuffer";
         overlordConn.onclose = function (evt) {
