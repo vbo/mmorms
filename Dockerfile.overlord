@@ -1,0 +1,15 @@
+# Overlord app - use with: fly deploy --config overlord/fly.toml
+# Build context: repo root
+FROM golang:1.22-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY overlord/ ./overlord/
+RUN CGO_ENABLED=0 go build -o overlord ./overlord
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/overlord .
+EXPOSE 8080
+ENV PORT=8080
+CMD ["./overlord"]

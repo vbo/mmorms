@@ -106,8 +106,6 @@ var MAP_FILES = []string{
     "./public/slopes_2.bmp",
 }
 
-var MAPS_LOADED = make([]image.Image, len(MAP_FILES))
-
 func NewTank(net *Network, ownerId uint32) *Movable {
     return &Movable {
         id: net.GetNewObjectId(),
@@ -122,9 +120,9 @@ func NewTank(net *Network, ownerId uint32) *Movable {
 }
 
 func generateMapBitmap(mapBitmap []byte) int {
-    mapi := rand.Intn(len(MAPS_LOADED))
+    mapi := rand.Intn(len(MAP_FILES))
     log.Println("Loading map", MAP_FILES[mapi])
-    img := MAPS_LOADED[mapi]
+    img := loadMap(MAP_FILES[mapi])
     p := 0
     c := 0
     for y := 0; y < HEIGHT; y++ {
@@ -946,9 +944,6 @@ func main() {
     var net Network
     net.Init()
 
-    for i, mapfile := range MAP_FILES {
-        MAPS_LOADED[i] = loadMap(mapfile)
-    }
     go gameLoop(&net)
 
     serverErr := runServer(&net)

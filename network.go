@@ -5,11 +5,15 @@ import (
     "log"
     "encoding/binary"
     "net/http"
+    "net/http/httputil"
+    "net/url"
+    "strings"
     "time"
     "sync"
     "github.com/gorilla/websocket"
     "flag"
     "fmt"
+    "os"
 )
 
 import _ "net/http/pprof"
@@ -25,6 +29,14 @@ const PINGS_RING = 8
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 var overlord = flag.String("overlord", "localhost:7070", "overlord address")
+
+// Effective values after env overlay (set by applyEnvOverrides)
+var effectiveOverlordAddr string   // for /update HTTP calls
+var effectivePublicWsUrl string   // for registration url param (wss://host/ws)
+var varsJsOverlord string         // for client (host or empty if embedded)
+var varsJsOverlordPath string     // for client ("/overlord" or "/ws")
+var effectiveListenAddr string    // for ListenAndServe
+var proxyOverlord bool            // true when embedded, proxy /overlord/*
 
 type StatsRequest struct {
     w io.Writer
@@ -58,7 +70,11 @@ func (net *Network) GetNewObjectId() uint32 {
 }
 
 func updateOverlord(players int) {
-    reqUrl := fmt.Sprintf("http://%s/update?url=ws://%s/ws&players=%d", *overlord, *addr, players)
+    publicUrl := effectivePublicWsUrl
+    if publicUrl == "" {
+        publicUrl = "ws://" + *addr + "/ws"
+    }
+    reqUrl := fmt.Sprintf("http://%s/update?url=%s&players=%d", effectiveOverlordAddr, publicUrl, players)
     resp, err := http.Get(reqUrl)
     if err != nil {
         log.Printf("Error updating overlord: %s", err)
@@ -226,17 +242,67 @@ func serveStats(net *Network, w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVarsJs(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "window.overlord='%s';", *overlord)
+    fmt.Fprintf(w, "window.overlord='%s';window.overlordPath='%s';", varsJsOverlord, varsJsOverlordPath)
+}
+
+func proxyToOverlord(w http.ResponseWriter, r *http.Request) {
+    target, _ := url.Parse("http://localhost:7070")
+    path := strings.TrimPrefix(r.URL.Path, "/overlord")
+    if path == "" {
+        path = "/"
+    }
+    r.URL.Path = path
+    proxy := httputil.NewSingleHostReverseProxy(target)
+    proxy.ServeHTTP(w, r)
+}
+
+func applyEnvOverrides() {
+    if port := os.Getenv("PORT"); port != "" {
+        effectiveListenAddr = ":" + port
+    } else {
+        effectiveListenAddr = *addr
+    }
+    overlordUrl := os.Getenv("OVERLORD_URL")
+    if overlordUrl == "" {
+        proxyOverlord = true
+        effectiveOverlordAddr = "localhost:7070"
+        varsJsOverlord = ""
+        varsJsOverlordPath = "/overlord/ws"
+        if app := os.Getenv("FLY_APP_NAME"); app != "" {
+            effectivePublicWsUrl = "wss://" + app + ".fly.dev/ws"
+        } else if pub := os.Getenv("PUBLIC_WS_URL"); pub != "" {
+            effectivePublicWsUrl = pub
+        } else {
+            effectivePublicWsUrl = ""
+        }
+    } else {
+        proxyOverlord = false
+        effectiveOverlordAddr = overlordUrl
+        varsJsOverlord = overlordUrl
+        varsJsOverlordPath = "/ws"
+        if app := os.Getenv("FLY_APP_NAME"); app != "" {
+            effectivePublicWsUrl = "wss://" + app + ".fly.dev/ws"
+        } else if pub := os.Getenv("PUBLIC_WS_URL"); pub != "" {
+            effectivePublicWsUrl = pub
+        } else {
+            effectivePublicWsUrl = "wss://" + overlordUrl + "/ws"
+        }
+    }
 }
 
 func runServer(net *Network) error {
+    applyEnvOverrides()
     http.Handle("/", http.FileServer(http.Dir("./public")))
     http.HandleFunc("/vars.js", serveVarsJs)
+    if proxyOverlord {
+        http.HandleFunc("/overlord/", proxyToOverlord)
+        http.HandleFunc("/overlord", proxyToOverlord)
+    }
     http.HandleFunc("/ws", func (w http.ResponseWriter, r *http.Request) { serveWebsocket(net, w, r) })
     http.HandleFunc("/stats", func (w http.ResponseWriter, r *http.Request) { serveStats(net, w, r) })
 
-    log.Printf("Starting web server on %s...", *addr)
-    return http.ListenAndServe(*addr, nil)
+    log.Printf("Starting web server on %s...", effectiveListenAddr)
+    return http.ListenAndServe(effectiveListenAddr, nil)
 }
 
 func average(vs []float64) float64 {
