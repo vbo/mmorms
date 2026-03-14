@@ -2,6 +2,8 @@
 
 A multiplayer real-time artillery tank game inspired by Worms. Play in your browser with tanks, shooting, jumping, shields, destructible terrain, and bots.
 
+Play now: http://tankoids.vbo.name
+
 ## Architecture
 
 - **mmorms** — Game server (Go). Physics, WebSocket game logic, terrain destruction, bots, leaderboard. Serves the web client and game WebSocket.
