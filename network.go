@@ -35,6 +35,7 @@ var effectiveOverlordAddr string   // for /update HTTP calls
 var effectivePublicWsUrl string   // for registration url param (wss://host/ws)
 var varsJsOverlord string         // for client (host or empty if embedded)
 var varsJsOverlordPath string     // for client ("/overlord" or "/ws")
+var buildVersion string           // set via -ldflags at build time
 var effectiveListenAddr string    // for ListenAndServe
 var proxyOverlord bool            // true when embedded, proxy /overlord/*
 
@@ -242,7 +243,10 @@ func serveStats(net *Network, w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVarsJs(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "window.overlord='%s';window.overlordPath='%s';", varsJsOverlord, varsJsOverlordPath)
+    if buildVersion == "" {
+        buildVersion = "dev"
+    }
+    fmt.Fprintf(w, "window.overlord='%s';window.overlordPath='%s';window.version='%s';", varsJsOverlord, varsJsOverlordPath, buildVersion)
 }
 
 func proxyToOverlord(w http.ResponseWriter, r *http.Request) {
