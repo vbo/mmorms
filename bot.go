@@ -1,3 +1,6 @@
+// Package main wires in-process bots into the game: creates bot clients that
+// connect via the internal Network, translates between game messages and the
+// botai package, and spawns bots to fill empty slots.
 package main
 
 import (

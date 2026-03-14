@@ -1,3 +1,6 @@
+// Package main runs the overlord matchmaking server: keeps a registry of game
+// servers (/update), serves the list to clients (/list), and provides an
+// optional WebSocket endpoint. Can run standalone or be embedded in mmorms.
 package main
 
 import (

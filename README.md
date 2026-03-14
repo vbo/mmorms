@@ -90,9 +90,17 @@ If the overlord is unavailable, the client falls back to connecting directly to 
 
 ```
 .
-├── main.go        # Game loop, physics, maps
-├── network.go     # WebSocket server, HTTP, overlord registration
-├── bot.go         # AI bots
-├── overlord/      # Matchmaking server
-└── public/        # Static assets (index.html, game.js, render.js, maps)
+├── main.go            # Game loop, physics, maps
+├── network.go         # WebSocket server, HTTP, overlord registration
+├── bot.go             # AI bots
+├── botai/             # Bot AI logic
+├── netbot/            # Network bot
+├── overlord/          # Matchmaking server
+├── public/            # Static assets (index.html, game.js, render.js, map .bmp)
+├── scripts/           # entrypoint.sh, load_test.py
+├── Dockerfile         # Main app (mmorms + embedded overlord)
+├── Dockerfile.overlord # Standalone overlord for scale-out
+├── fly.toml           # Fly.io config for mmorms
+├── run_prod.sh        # Production respawn script
+└── build_run.py, singlebox.py, cleanup.py  # Dev scripts
 ```

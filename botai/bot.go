@@ -1,3 +1,6 @@
+// Package botai implements the bot AI: parses game messages (greeting, death),
+// emits player inputs (move, aim, shoot, jump), and handles respawn. Used by
+// both in-process bots (mmorms) and external netbot clients.
 package botai
 
 import (
