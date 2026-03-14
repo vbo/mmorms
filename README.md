@@ -14,68 +14,23 @@ Play now: http://tankoids.vbo.name
 ```mermaid
 sequenceDiagram
     participant U as User Browser
-    participant S as Site (static)
+    participant S as Site
     participant O as Overlord
     participant G1 as Game Server 1
     participant G2 as Game Server 2
-    participant GN as Game Server N
 
     U->>S: 1. Load HTML/JS/CSS
-    U->>O: 2. WebSocket: request server list
-    O->>U: 3. Server list (URL, player count)
-    U->>U: 4. Pick server (fewest players)
-    U->>G2: 5. Connect WebSocket
-    G2->>U: 6. Game state, play
+    U->>O: 2. WebSocket: server list
+    O->>U: 3. Server list (URL, players)
+    U->>G2: 4. Connect WebSocket
+    G2->>U: 5. Game state, play
     G1->>O: /update (register)
     G2->>O: /update (register)
-    GN->>O: /update (register)
 ```
 
-### Build & Deploy
+### CI/CD
 
-```mermaid
-flowchart LR
-    subgraph Col1[" "]
-        direction TB
-        PUSH["Push to main/master"]
-        subgraph CI["GitHub Actions (deploy.yml)"]
-            direction TB
-            C1["actions/checkout"]
-            C2["Setup flyctl"]
-            C3["Compute version"]
-            C4["fly deploy (FLY_API_TOKEN)"]
-            C1 --> C2 --> C3 --> C4
-        end
-        PUSH --> C1
-    end
-
-    subgraph Col2[" "]
-        direction TB
-        subgraph Build["Remote build (Depot)"]
-            direction TB
-            B1["Docker build"]
-            B2["Push to registry"]
-            B1 --> B2
-        end
-    end
-
-    subgraph Col3[" "]
-        subgraph Fly["Fly.io"]
-            subgraph Mmorms["mmorms app"]
-                H1["instance 1"]
-                H2["instance 2"]
-                HN["instance N"]
-            end
-            subgraph Overlord["mmorms-overlord app"]
-                O["Overlord"]
-            end
-        end
-        H1 & H2 & HN -.->|"/update"| O
-    end
-
-    C4 --> B1
-    B2 --> H1
-```
+On push to `main` or `master`, GitHub Actions runs `.github/workflows/deploy.yml`: checkout, setup flyctl, compute version, then `fly deploy` (using `FLY_API_TOKEN` from repo secrets). Fly builds the Docker image remotely (Depot), pushes it to the registry, and deploys to the mmorms app. Overlord runs embedded in each mmorms instance; for multi-server scale-out, deploy overlord separately via `Dockerfile.overlord` and `overlord/fly.toml`.
 
 ## Requirements
 
