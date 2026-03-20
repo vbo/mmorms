@@ -2,7 +2,7 @@
 
 A multiplayer real-time artillery tank game inspired by Worms. Play in your browser with tanks, shooting, jumping, shields, destructible terrain, and bots.
 
-Play now: http://tankoids.vbo.name
+Play now: [tankoids.com](https://tankoids.com/)
 
 ![Tankoids screenshot](./public/screenshot.png)
 
