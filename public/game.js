@@ -54,8 +54,14 @@ window.onload = function () {
     var BODY_TILT_IDLE_SAMPLE_OFFSET = TANK_WIDTH * 0.25;
     /** Clamp terrain-derived tilt so cliffs do not flip the sprite. */
     var BODY_TILT_MAX_DEG = 25;
-    /** Lerp factor per frame (~30 FPS); higher = snappier, lower = smoother. */
-    var BODY_TILT_SMOOTH = 0.32;
+    /** Spring–damper on body angle (deg/s² per deg error); tuned with real dt. */
+    var BODY_TILT_SPRING = 92;
+    /** Damping (1/s); ~2*sqrt(BODY_TILT_SPRING) ≈ critical. */
+    var BODY_TILT_DAMPING = 19;
+    /** Ignore raw terrain tilt steps smaller than this (reduces pixel jitter). */
+    var BODY_TILT_DEADZONE_DEG = 2.5;
+    /** Seconds; low-pass time constant on terrain target before the spring. */
+    var BODY_TILT_TARGET_TAU_SEC = 0.055;
 
     var INTERPOLATION_ENABLED = true;
 
@@ -150,11 +156,17 @@ window.onload = function () {
         return mapBitmap[ix + iy * WIDTH] === 1;
     }
 
-    /** Target body rotation in degrees from terrain under treads (not smoothed). */
+    /**
+     * Target body rotation in degrees from terrain under treads.
+     * This uses multi-point least-squares fit over the sampled span, but
+     * keeps the span confined to the "rear half" when moving so downhills
+     * don't tilt too early.
+     */
     function computeBodyTargetTiltDeg(tank, mapBitmap) {
         if (!mapBitmap || !isTankOnGround(mapBitmap, tank.x, tank.y)) {
             return 0;
         }
+
         var hw = TANK_WIDTH * 0.5;
         var colL;
         var colR;
@@ -172,31 +184,49 @@ window.onload = function () {
             colL = Math.floor(tank.x - off);
             colR = Math.floor(tank.x + off);
         }
-        if (colL < 0) {
-            colL = 0;
-        }
-        if (colR >= WIDTH) {
-            colR = WIDTH - 1;
-        }
-        if (colR <= colL) {
-            colR = Math.min(WIDTH - 1, colL + 1);
-        }
+
+        if (colL < 0) { colL = 0; }
+        if (colR >= WIDTH) { colR = WIDTH - 1; }
+        if (colR <= colL) { colR = Math.min(WIDTH - 1, colL + 1); }
         if (colL > colR) {
             var tmp = colL;
             colL = colR;
             colR = tmp;
         }
-        var yL = surfaceYAtColumn(mapBitmap, colL);
-        var yR = surfaceYAtColumn(mapBitmap, colR);
-        if (yL < 0 || yR < 0) {
+
+        // Multi-point line fit y(col) => slope dy/dx
+        // Using more points reduces crater/pixel jitter while staying in the rear-half window.
+        var N = 5; // 5 samples is a good cost/quality trade-off
+        var sumX = 0, sumY = 0, sumXX = 0, sumXY = 0, count = 0;
+        var prevCol = null;
+        for (var i = 0; i < N; i++) {
+            var t = (N === 1) ? 0 : (i / (N - 1));
+            var col = Math.round(colL + (colR - colL) * t);
+            if (col < colL || col > colR) continue;
+            if (prevCol === col) continue; // avoid duplicates after rounding
+            prevCol = col;
+
+            var y = surfaceYAtColumn(mapBitmap, col);
+            if (y < 0) continue;
+
+            sumX += col;
+            sumY += y;
+            sumXX += col * col;
+            sumXY += col * y;
+            count++;
+        }
+
+        if (count < 2) {
             return 0;
         }
-        var dx = colR - colL;
-        if (dx === 0) {
+
+        var denom = count * sumXX - sumX * sumX;
+        if (denom === 0) {
             return 0;
         }
-        var dy = yR - yL;
-        return Math.atan2(dy, dx) * 180 / Math.PI;
+
+        var slope = (count * sumXY - sumX * sumY) / denom; // dy/dx
+        return Math.atan(slope) * 180 / Math.PI;
     }
 
     function Tank (x, y, hp, angle, shield, shieldPercent, direction, clientId) {
@@ -273,6 +303,12 @@ window.onload = function () {
         this.body.regX = 47;
         this.body.regY = 27;
         this.body.rotation = 0;
+        /** Body tilt angular velocity (deg/s) for spring–damper. */
+        this.bodyTiltOmega = 0;
+        /** Low-passed tilt target (deg) fed to the spring. */
+        this._bodyTiltTargetDeg = 0;
+        /** Last accepted raw terrain tilt for dead zone (deg). */
+        this._bodyTiltLastRawDeg = 0;
         this.hpLabel.regY = -35;
         this.shield.regY = -10;
         this.shieldBar.regY = 0;
@@ -324,17 +360,39 @@ window.onload = function () {
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
     }
 
-    Tank.prototype.updateBodyTilt = function (mapBitmap, inSpaceMode) {
-        var target = 0;
+    Tank.prototype.updateBodyTilt = function (mapBitmap, inSpaceMode, dtSec) {
+        if (dtSec == null || dtSec <= 0 || dtSec > 0.08) {
+            dtSec = 1 / 30;
+        }
+        var rawDeg = 0;
         if (!inSpaceMode && mapBitmap) {
-            target = computeBodyTargetTiltDeg(this, mapBitmap);
-            if (target > BODY_TILT_MAX_DEG) {
-                target = BODY_TILT_MAX_DEG;
-            } else if (target < -BODY_TILT_MAX_DEG) {
-                target = -BODY_TILT_MAX_DEG;
+            rawDeg = computeBodyTargetTiltDeg(this, mapBitmap);
+            if (rawDeg > BODY_TILT_MAX_DEG) {
+                rawDeg = BODY_TILT_MAX_DEG;
+            } else if (rawDeg < -BODY_TILT_MAX_DEG) {
+                rawDeg = -BODY_TILT_MAX_DEG;
             }
         }
-        this.body.rotation += BODY_TILT_SMOOTH * (target - this.body.rotation);
+        if (Math.abs(rawDeg - this._bodyTiltLastRawDeg) < BODY_TILT_DEADZONE_DEG) {
+            rawDeg = this._bodyTiltLastRawDeg;
+        } else {
+            this._bodyTiltLastRawDeg = rawDeg;
+        }
+        var alphaT = 1 - Math.exp(-dtSec / BODY_TILT_TARGET_TAU_SEC);
+        this._bodyTiltTargetDeg += alphaT * (rawDeg - this._bodyTiltTargetDeg);
+
+        var err = this._bodyTiltTargetDeg - this.body.rotation;
+        var accel = BODY_TILT_SPRING * err - BODY_TILT_DAMPING * this.bodyTiltOmega;
+        this.bodyTiltOmega += accel * dtSec;
+        this.body.rotation += this.bodyTiltOmega * dtSec;
+
+        if (this.body.rotation > BODY_TILT_MAX_DEG) {
+            this.body.rotation = BODY_TILT_MAX_DEG;
+            this.bodyTiltOmega *= 0.25;
+        } else if (this.body.rotation < -BODY_TILT_MAX_DEG) {
+            this.body.rotation = -BODY_TILT_MAX_DEG;
+            this.bodyTiltOmega *= 0.25;
+        }
     };
 
     Tank.prototype.updateName = function (name, lifeFrags) {
@@ -842,12 +900,14 @@ window.onload = function () {
     var deltaTime = 0;
     function tick(evt) {
         var curTime = performance.now();
+        var dtMs = evt && typeof evt.delta === "number" ? evt.delta : (1000 / 30);
+        var dtSec = Math.min(Math.max(dtMs / 1000, 0.001), 0.064);
         for (var id in bullets) {
             var bullet = bullets[id];
             bullet.updateState(curTime);
         }
         for (var tid in tanks) {
-            tanks[tid].updateBodyTilt(mapBitmap, spaceMode);
+            tanks[tid].updateBodyTilt(mapBitmap, spaceMode, dtSec);
         }
         //changeAngle(inputState.changingAngle, 0.04 * deltaTime);
         render.redraw();
