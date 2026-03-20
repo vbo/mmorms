@@ -9,7 +9,8 @@ window.onload = function () {
         'Make sure you have a good speed before jumping',
         'White color inside the tank means lack of energy for the shield.',
         'As you level up the power of your bullets increase.',
-        'When you destroy a tank, you get all it\'s power.'
+        'When you destroy a tank, you get all it\'s power.',
+        'It\'s open-source! github.com/vbo/mmorms',
     ];
 
     var KEYCODE_ENTER = 13;
@@ -70,7 +71,7 @@ window.onload = function () {
             document.getElementById("finalScoreBlock").style.display = "block";
             document.getElementById("lifeScore").textContent = frags;
         }
-        var index = Math.round(Math.random()*HINTS.length);
+        var index = Math.floor(Math.random() * HINTS.length);
         document.getElementById("randomHint").textContent = 
             HINTS[index];
     }

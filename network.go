@@ -246,10 +246,27 @@ func serveStats(net *Network, w http.ResponseWriter, r *http.Request) {
 }
 
 func serveVarsJs(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Cache-Control", "no-store")
     if buildVersion == "" {
         buildVersion = "dev"
     }
     fmt.Fprintf(w, "window.overlord='%s';window.overlordPath='%s';window.version='%s';", varsJsOverlord, varsJsOverlordPath, buildVersion)
+}
+
+// withNoStoreScripts wraps a file server so HTML/JS/CSS are never cached by the
+// browser. That way local edits to public/*.js show up on a normal refresh
+// without hard-refresh or clearing cache.
+func withNoStoreScripts(h http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        path := r.URL.Path
+        if path == "/" ||
+            strings.HasSuffix(path, ".html") ||
+            strings.HasSuffix(path, ".js") ||
+            strings.HasSuffix(path, ".css") {
+            w.Header().Set("Cache-Control", "no-store")
+        }
+        h.ServeHTTP(w, r)
+    })
 }
 
 func proxyToOverlord(w http.ResponseWriter, r *http.Request) {
@@ -299,7 +316,7 @@ func applyEnvOverrides() {
 
 func runServer(net *Network) error {
     applyEnvOverrides()
-    http.Handle("/", http.FileServer(http.Dir("./public")))
+    http.Handle("/", withNoStoreScripts(http.FileServer(http.Dir("./public"))))
     http.HandleFunc("/vars.js", serveVarsJs)
     if proxyOverlord {
         http.HandleFunc("/overlord/", proxyToOverlord)
