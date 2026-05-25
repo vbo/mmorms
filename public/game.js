@@ -779,13 +779,7 @@ window.onload = function () {
         return power;
     }
 
-    window.addEventListener("keydown", function(e) {
-        var keyCode = 'which' in e ? e.which : e.keyCode;
-        if (keyCode == KEYCODE_ENTER &&
-            document.getElementById("overlay").style.display != "none") {
-            onPlayButtonClicked();
-            return;
-        }
+    function handleKeyDown(keyCode) {
         if (!me()) {
             return;
         }
@@ -849,6 +843,16 @@ window.onload = function () {
                 updateJumpProgress();
             }
         }
+    }
+
+    window.addEventListener("keydown", function(e) {
+        var keyCode = 'which' in e ? e.which : e.keyCode;
+        if (keyCode == KEYCODE_ENTER &&
+            document.getElementById("overlay").style.display != "none") {
+            onPlayButtonClicked();
+            return;
+        }
+        handleKeyDown(keyCode);
     });
 
     function scaleTimeToByte(sign, startTime, delay) {
@@ -859,8 +863,7 @@ window.onload = function () {
         return sign * (delta / delay) * 127;
     }
 
-    window.addEventListener("keyup", function(e) {
-        var keyCode = 'which' in e ? e.which : e.keyCode;
+    function handleKeyUp(keyCode) {
         if (!me()) {
             return;
         }
@@ -906,7 +909,76 @@ window.onload = function () {
             inputState.jumpPower = 0;
             conn.send(messageBuffer);
         }
+    }
+
+    window.addEventListener("keyup", function(e) {
+        var keyCode = 'which' in e ? e.which : e.keyCode;
+        handleKeyUp(keyCode);
     });
+
+    function setupTouchControls() {
+        var isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+        if (!isTouch) {
+            return;
+        }
+        var root = document.getElementById("touchControls");
+        if (!root) {
+            return;
+        }
+        var buttons = [
+            // label, keyCode, anchor side, x offset (from side), bottom offset
+            {label: "◀", code: KEYCODE_LEFT,  side: "left",  x: 16,  y: 20},
+            {label: "▶", code: KEYCODE_RIGHT, side: "left",  x: 96,  y: 20},
+            {label: "▼", code: KEYCODE_DOWN,  side: "left",  x: 180, y: 20},
+            {label: "▲", code: KEYCODE_UP,    side: "left",  x: 180, y: 100},
+            {label: "Z", code: KEYCODE_Z, side: "right", x: 180, y: 20},
+            {label: "X", code: KEYCODE_X, side: "right", x: 96,  y: 20},
+            {label: "C", code: KEYCODE_C, side: "right", x: 16,  y: 20},
+        ];
+        buttons.forEach(function (b) {
+            var el = document.createElement("button");
+            el.className = "tc-btn";
+            el.textContent = b.label;
+            el.setAttribute("aria-label", "key-" + b.label);
+            if (b.side == "left") {
+                el.style.left = b.x + "px";
+            } else {
+                el.style.right = b.x + "px";
+            }
+            el.style.bottom = b.y + "px";
+            var pressed = false;
+            var press = function (ev) {
+                ev.preventDefault();
+                if (pressed) return;
+                pressed = true;
+                el.classList.add("active");
+                handleKeyDown(b.code);
+            };
+            var release = function (ev) {
+                if (ev) ev.preventDefault();
+                if (!pressed) return;
+                pressed = false;
+                el.classList.remove("active");
+                handleKeyUp(b.code);
+            };
+            el.addEventListener("touchstart", press, {passive: false});
+            el.addEventListener("touchend", release, {passive: false});
+            el.addEventListener("touchcancel", release, {passive: false});
+            el.addEventListener("mousedown", press);
+            el.addEventListener("mouseup", release);
+            el.addEventListener("mouseleave", release);
+            el.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
+            root.appendChild(el);
+        });
+        var overlay = document.getElementById("overlay");
+        var refresh = function () {
+            var loginUp = overlay.style.display != "none";
+            root.classList.toggle("visible", !loginUp);
+        };
+        refresh();
+        new MutationObserver(refresh).observe(overlay, {attributes: true, attributeFilter: ["style"]});
+    }
+    setupTouchControls();
 
     function explodeAt(mapBitmap, cx, cy, r) {
         var rs = (r*r)|0;
