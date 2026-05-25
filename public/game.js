@@ -354,6 +354,57 @@ window.onload = function () {
 
     render.init(WIDTH, HEIGHT);
 
+    // HTML overlay used for crisp HP/nick labels — drawing them on the
+    // canvas would upscale (and pixelate) with CSS object-fit on big screens.
+    var labelOverlay = document.createElement("div");
+    labelOverlay.id = "labelOverlay";
+    labelOverlay.style.cssText =
+        "position: fixed; left: 0; top: 0; width: 0; height: 0;" +
+        " pointer-events: none; z-index: 10;" +
+        " font-family: Roboto, sans-serif; font-weight: 400;" +
+        " -webkit-font-smoothing: antialiased;";
+    document.body.appendChild(labelOverlay);
+
+    var labelMetrics = { scale: 1, offsetX: 0, offsetY: 0 };
+    function updateLabelMetrics() {
+        var canvas = document.getElementById("gameCanvas");
+        if (!canvas) { return; }
+        var rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) { return; }
+        var scale = Math.min(rect.width / WIDTH, rect.height / HEIGHT);
+        labelMetrics.scale = scale;
+        labelMetrics.offsetX = rect.left + (rect.width - WIDTH * scale) / 2;
+        labelMetrics.offsetY = rect.top + (rect.height - HEIGHT * scale) / 2;
+    }
+    window.addEventListener("resize", updateLabelMetrics);
+    updateLabelMetrics();
+
+    function updateLabelLayout() {
+        updateLabelMetrics();
+        var s = labelMetrics.scale;
+        var ox = labelMetrics.offsetX;
+        var oy = labelMetrics.offsetY;
+        // Mirror the original 11px canvas-text size, scaled so labels stay
+        // the same visual size as before but rendered crisply.
+        var fontPx = Math.max(11, 11 * s);
+        for (var tid in tanks) {
+            var t = tanks[tid];
+            if (!t.hpLabelEl || !t.nickLabelEl) { continue; }
+            var hpPt = t.hpLabel.localToGlobal(0, 0);
+            var nickPt = t.nickLabel.localToGlobal(0, 0);
+            t.hpLabelEl.style.fontSize = fontPx + "px";
+            t.nickLabelEl.style.fontSize = fontPx + "px";
+            // nickLabel.maxWidth is canvas-internal pixels; scale to display.
+            t.nickLabelEl.style.maxWidth = (100 * s) + "px";
+            t.hpLabelEl.style.transform =
+                "translate(" + (ox + hpPt.x * s) + "px, " +
+                (oy + hpPt.y * s) + "px) translate(-50%, 0)";
+            t.nickLabelEl.style.transform =
+                "translate(" + (ox + nickPt.x * s) + "px, " +
+                (oy + nickPt.y * s) + "px) translate(-50%, 0)";
+        }
+    }
+
     window.playButtonClicked = 0;
     window.me = function() {
         return tanks[myClientId];
@@ -510,9 +561,20 @@ window.onload = function () {
         this.gun = new createjs.Bitmap("/tank6-gun-fix1.png");
         this.body = new createjs.Bitmap("/tank6-body-fix1.png");
 
+        // hpLabel/nickLabel stay as invisible createjs anchors so we can
+        // reuse localToGlobal() to position the HTML overlay labels.
         this.hpLabel = new createjs.Text(this.hp, "11px Roboto", "Red");
         this.hpLabel.textAlign = "center";
-        
+        this.hpLabel.visible = false;
+        this.hpLabelEl = document.createElement("div");
+        this.hpLabelEl.style.cssText =
+            "position: absolute; left: 0; top: 0; color: red;" +
+            " text-align: center; white-space: nowrap;" +
+            " transform: translate(-9999px, -9999px);" +
+            " transform-origin: 0 0; will-change: transform;";
+        this.hpLabelEl.textContent = String(this.hp);
+        labelOverlay.appendChild(this.hpLabelEl);
+
         this.shield = new createjs.Shape();
         this.shield.graphics.beginStroke("blue").beginFill("blue").drawCircle(0, 0, 35);
         this.shield.alpha = 0.1;
@@ -550,7 +612,17 @@ window.onload = function () {
         this.nickLabel = new createjs.Text("Tank" + clientId, "11px Roboto", "Red");
         this.nickLabel.textAlign = "center";
         this.nickLabel.maxWidth = 100;
-        
+        this.nickLabel.visible = false;
+        this.nickLabelEl = document.createElement("div");
+        this.nickLabelEl.style.cssText =
+            "position: absolute; left: 0; top: 0; color: red;" +
+            " text-align: center; white-space: nowrap;" +
+            " overflow: hidden; text-overflow: ellipsis;" +
+            " transform: translate(-9999px, -9999px);" +
+            " transform-origin: 0 0; will-change: transform;";
+        this.nickLabelEl.textContent = "Tank" + clientId;
+        labelOverlay.appendChild(this.nickLabelEl);
+
         this.shape.addChild(this.gun);
         this.shape.addChild(this.body);
         this.shape.addChild(this.hpLabel);
@@ -622,6 +694,7 @@ window.onload = function () {
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
+        if (this.hpLabelEl) { this.hpLabelEl.textContent = String(this.hp); }
         var wasShieldOn = this.shield.visible;
         this.shield.visible = !!shield;
         // Use object identity (this === me()) rather than clientId == myClientId
@@ -683,11 +756,18 @@ window.onload = function () {
             }
         }
         this.nickLabel.text = name;
+        if (this.nickLabelEl) { this.nickLabelEl.textContent = name; }
     }
 
     Tank.prototype.destroy = function() {
         render.stage.removeChild(this.shape);
         render.stage.removeChild(this.hpLabel);
+        if (this.hpLabelEl && this.hpLabelEl.parentNode) {
+            this.hpLabelEl.parentNode.removeChild(this.hpLabelEl);
+        }
+        if (this.nickLabelEl && this.nickLabelEl.parentNode) {
+            this.nickLabelEl.parentNode.removeChild(this.nickLabelEl);
+        }
     }
 
     function Bullet (id, ownerId, x, y, vx, vy, creationTime) {
@@ -1334,6 +1414,7 @@ window.onload = function () {
             tanks[tid].updateBodyTilt(mapBitmap, spaceMode, dtSec);
         }
         render.redraw();
+        updateLabelLayout();
     }
 
     var wsProtocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
