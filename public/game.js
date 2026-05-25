@@ -622,9 +622,9 @@ window.onload = function () {
         this.hpLabel.text = this.hp;
         var wasShieldOn = this.shield.visible;
         this.shield.visible = !!shield;
-        // Play shield sound only when MY shield actually toggles — cooldown
-        // presses don't toggle anything server-side, so no sound.
-        if (this.clientId == myClientId && wasShieldOn !== !!shield) {
+        // Use object identity (this === me()) rather than clientId == myClientId
+        // to avoid Uint32/Int32 type-coercion mismatches on large IDs.
+        if (this === me() && wasShieldOn !== !!shield) {
             SoundManager.shield();
         }
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
