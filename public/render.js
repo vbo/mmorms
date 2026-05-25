@@ -11,9 +11,29 @@
         this.ctxBack = this.canvasBack.getContext('2d');
         this.maskImageData = this.ctx.createImageData(width, height);
         this.maskImageDataBack = this.ctxBack.createImageData(width, height);
+        // Dramatic battlefield sky: hazy/dusty gradient with smoke tones.
         var bgSky = new createjs.Shape();
-        bgSky.graphics.beginFill("lightcyan").drawRect(0, 0, width, height);
+        bgSky.graphics
+            .beginLinearGradientFill(
+                ["#1f2a33", "#3b4a55", "#7a7560", "#b8945a", "#d4a86a"],
+                [0, 0.35, 0.65, 0.85, 1],
+                0, 0, 0, height
+            )
+            .drawRect(0, 0, width, height);
         this.stage.addChild(bgSky);
+
+        // Sun/haze disc for extra atmosphere.
+        var sunHaze = new createjs.Shape();
+        var sunX = width * 0.78;
+        var sunY = height * 0.22;
+        sunHaze.graphics
+            .beginRadialGradientFill(
+                ["rgba(255,220,160,0.55)", "rgba(255,200,140,0.18)", "rgba(255,200,140,0)"],
+                [0, 0.5, 1],
+                sunX, sunY, 0, sunX, sunY, Math.max(width, height) * 0.35
+            )
+            .drawRect(0, 0, width, height);
+        this.stage.addChild(sunHaze);
 
         // Background "theme" image.
         this.bgImage = new createjs.Bitmap("/theme.jpg");

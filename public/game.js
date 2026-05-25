@@ -724,26 +724,48 @@ window.onload = function () {
         return y.id - x.id;
     }
 
-    var leaderBoardTitle = new createjs.Text("LEADERBOARD", "12px Roboto", "Black");
+    var LB_PANEL_X = 5;
+    var LB_PANEL_Y = 0;
+    var LB_PANEL_W = 220;
+    var LB_PANEL_H = 30 + (MAX_LEADERS + 1) * 14;
+    var LB_FONT = "'Black Ops One', 'Stencil Std', 'Impact', sans-serif";
+    var LB_TEXT_COLOR = "#f0e6c0";
+    var LB_TITLE_COLOR = "#ffd84a";
+
+    var leaderBoardPanel = new createjs.Shape();
+    leaderBoardPanel.graphics
+        .beginFill("rgba(34, 41, 27, 0.78)")
+        .setStrokeStyle(2)
+        .beginStroke("#6b6f3a")
+        .drawRect(LB_PANEL_X, LB_PANEL_Y, LB_PANEL_W, LB_PANEL_H);
+    // Inner accent stripe for a stenciled-metal feel.
+    leaderBoardPanel.graphics
+        .setStrokeStyle(1)
+        .beginStroke("rgba(220, 210, 140, 0.35)")
+        .drawRect(LB_PANEL_X + 4, LB_PANEL_Y + 4, LB_PANEL_W - 8, LB_PANEL_H - 8);
+    leaderBoardPanel.visible = false;
+    render.stage.addChild(leaderBoardPanel);
+
+    var leaderBoardTitle = new createjs.Text("// LEADERBOARD //", "bold 14px " + LB_FONT, LB_TITLE_COLOR);
     leaderBoardTitle.visible = false;
-    leaderBoardTitle.y = 5;
-    leaderBoardTitle.x = 45;
+    leaderBoardTitle.y = 8;
+    leaderBoardTitle.x = LB_PANEL_X + 22;
     render.stage.addChild(leaderBoardTitle);
     var leaderboardNickLines = [];
     var leaderboardFragLines = [];
     for (var i = 0; i <= MAX_LEADERS; i++) {
-        var line = new createjs.Text("", "12px Roboto", "Black");
-        var yOffset = 25 + i*14;
-        var nickWidth = 130;
+        var line = new createjs.Text("", "13px " + LB_FONT, LB_TEXT_COLOR);
+        var yOffset = 30 + i*14;
+        var nickWidth = 150;
         line.y = yOffset;
-        line.x = 10;
+        line.x = LB_PANEL_X + 10;
         line.lineWidth = nickWidth;
         render.stage.addChild(line);
         leaderboardNickLines[i] = line;
 
-        line = new createjs.Text("", "12px Roboto", "Black");
+        line = new createjs.Text("", "13px " + LB_FONT, LB_TITLE_COLOR);
         line.y = yOffset;
-        line.x = nickWidth + 10;
+        line.x = LB_PANEL_X + nickWidth + 20;
         render.stage.addChild(line);
         leaderboardFragLines[i] = line;
     }
@@ -755,10 +777,12 @@ window.onload = function () {
             leaderboardFragLines[i].text = "";
         }
         leaderBoardTitle.visible = false;
+        leaderBoardPanel.visible = false;
         for (var i = 0; i <= Math.min(entries.length, MAX_LEADERS); i++) {
             var leader = entries[i];
             if (leader && leader.frags != 0) {
                 leaderBoardTitle.visible = true;
+                leaderBoardPanel.visible = true;
                 leaderboardNickLines[i].text = "#" + i + "    " + leader.name.substring(0,12);
                 leaderboardFragLines[i].text = leader.frags;
             }

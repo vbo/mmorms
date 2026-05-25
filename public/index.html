@@ -3,7 +3,7 @@
     <head>
         <title>Tankoids - artillery based shooter game</title>
         <script src="https://code.createjs.com/easeljs-0.8.2.min.js"></script>
-        <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css?family=Roboto&family=Black+Ops+One&family=Russo+One" rel="stylesheet"/>
         <script src="/vars.js"></script>
         <script>window.addEventListener('DOMContentLoaded', function() { document.getElementById('versionDisplay').textContent = (typeof window.version !== 'undefined' ? window.version : 'dev'); });</script>
         <script src="/text-encoding/encoding-indexes.js"></script>
@@ -22,6 +22,68 @@
                 transform: translateX(-50%);
                 padding: 10px 16px !important;
                 height: auto !important;
+            }
+            #login {
+                color: #f0e6c0 !important;
+                background:
+                    repeating-linear-gradient(45deg, rgba(0,0,0,0.06) 0 8px, rgba(255,255,255,0.04) 8px 16px),
+                    linear-gradient(180deg, #3d4628 0%, #2b3320 60%, #1f2616 100%) !important;
+                border: 2px solid #6b6f3a !important;
+                box-shadow:
+                    inset 0 0 0 4px rgba(0,0,0,0.45),
+                    inset 0 0 0 5px rgba(220,210,140,0.25),
+                    0 6px 18px rgba(0,0,0,0.55) !important;
+                border-radius: 2px !important;
+                font-family: 'Black Ops One', 'Russo One', 'Impact', sans-serif !important;
+                letter-spacing: 0.5px;
+                text-shadow: 1px 1px 0 rgba(0,0,0,0.6);
+            }
+            #login h1 {
+                color: #ffd84a;
+                letter-spacing: 2px;
+                margin: 6px 0 4px 0;
+                text-transform: uppercase;
+            }
+            #login a, #login a:visited { color: #ffd84a !important; }
+            #login input {
+                background: #1a1f12;
+                color: #f0e6c0;
+                border: 2px solid #6b6f3a;
+                border-radius: 0;
+                padding: 4px 8px;
+                font-family: 'Black Ops One', 'Russo One', 'Impact', sans-serif;
+                outline: none;
+            }
+            #login input:focus { border-color: #ffd84a; }
+            #login button {
+                background: linear-gradient(180deg, #5a6630 0%, #3d4628 100%);
+                color: #f0e6c0;
+                border: 2px solid #6b6f3a;
+                border-radius: 0;
+                padding: 4px 12px;
+                font-family: 'Black Ops One', 'Russo One', 'Impact', sans-serif;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4), 1px 1px 0 #000 !important;
+                cursor: pointer;
+            }
+            #login button:hover {
+                background: linear-gradient(180deg, #6b7a3a 0%, #4a5530 100%);
+                border-color: #ffd84a;
+            }
+            #login #versionDisplay { color: #b8b07a !important; }
+            #login #finalScoreBlock {
+                color: #ffd84a;
+                font-size: 22px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                border-top: 1px dashed rgba(220,210,140,0.4);
+                border-bottom: 1px dashed rgba(220,210,140,0.4);
+                padding: 8px 0;
+            }
+            #login #finalScoreBlock #lifeScore {
+                color: #ff5050;
+                font-size: 28px;
             }
             #login input, #login button { max-width: 100%; }
             #rotateHint {
@@ -88,7 +150,6 @@
         <div style="width: 100%; height: 100%;">
             <div style="width: 100%; height: 100%; position: relative;">
                 <div id="login" style="
-                        background: #dedede;
                         height: 215px;
                         width: 600px;
                         position: absolute;
@@ -96,13 +157,11 @@
                         left: 50%;
                         margin-left: -300px;
                         z-index: 100;
-                        font-family: 'Roboto', sans-serif;
-                        border-radius: 5px;
                         text-align: center;
                     ">
-                    <h1>Tankoids.Online <span id="versionDisplay" style="font-size: 14px; color: #666;">-</span></h1>
+                    <h1>Tankoids.Online <span id="versionDisplay" style="font-size: 14px;">-</span></h1>
                     <p ></p>
-                    <div id="finalScoreBlock" style="display: none; margin-bottom:16px; margin-top: -10px;">You scored <span id="lifeScore">12</span>.</div>
+                    <div id="finalScoreBlock" style="display: none; margin-bottom:16px; margin-top: -10px;">K.I.A. &mdash; FINAL SCORE: <span id="lifeScore">12</span></div>
                     <div style="font-size: 24px;">
                         name: <input id="loginInput" style="font-size: 24px;"/>
                         <button id="playButton" onclick="onPlayButtonClicked()" style="font-size: 24px; box-shadow: 1px 1px 1px gray;">play</button>
