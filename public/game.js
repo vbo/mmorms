@@ -980,7 +980,16 @@ window.onload = function () {
 
         if (window.visualViewport) {
             var vv = window.visualViewport;
+            // Override #touchControls' inset:0 with explicit width/height
+            // derived from the visual viewport — on iOS Safari the
+            // layout-viewport size that "inset:0" resolves against can drift
+            // during pinch-zoom + pan, so we don't rely on it.
+            root.style.inset = "auto";
+            root.style.top = "0";
+            root.style.left = "0";
             var syncToViewport = function () {
+                root.style.width = (vv.width * vv.scale) + "px";
+                root.style.height = (vv.height * vv.scale) + "px";
                 root.style.transformOrigin = "0 0";
                 root.style.transform =
                     "translate(" + vv.offsetLeft + "px, " + vv.offsetTop + "px)" +
@@ -989,6 +998,7 @@ window.onload = function () {
             syncToViewport();
             vv.addEventListener("resize", syncToViewport);
             vv.addEventListener("scroll", syncToViewport);
+            window.addEventListener("scroll", syncToViewport, {passive: true});
         }
     }
     setupTouchControls();
