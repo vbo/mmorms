@@ -95,7 +95,7 @@ window.onload = function () {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(180, c.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(35, c.currentTime + 0.18);
-                gain.gain.setValueAtTime(0.45, c.currentTime);
+                gain.gain.setValueAtTime(0.28, c.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.18);
                 osc.start(c.currentTime); osc.stop(c.currentTime + 0.18);
             },
@@ -192,15 +192,29 @@ window.onload = function () {
                     var dx = myTank.x - ex, dy = myTank.y - ey;
                     dist = Math.sqrt(dx * dx + dy * dy);
                 }
-                var maxDist = 900;
+                var maxDist = 1400;
                 if (dist > maxDist) return;
-                var vol = (1 - dist / maxDist) * Math.min(radius / 50, 1) * 0.55;
-                if (vol < 0.02) return;
+                var vol = (1 - dist / maxDist) * Math.min(radius / 50, 1.4);
+                if (vol < 0.03) return;
 
-                var sampleRate = c.sampleRate;
-                var duration = 0.7;
-                var bufSize = Math.floor(sampleRate * duration);
-                var buf = c.createBuffer(1, bufSize, sampleRate);
+                var now = c.currentTime;
+                var duration = 0.8;
+
+                // Low-freq "boom" body — sine sweeping down gives the punch.
+                var boom = c.createOscillator();
+                var boomGain = c.createGain();
+                boom.connect(boomGain); boomGain.connect(c.destination);
+                boom.type = 'sine';
+                boom.frequency.setValueAtTime(160, now);
+                boom.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+                boomGain.gain.setValueAtTime(0.7 * vol, now);
+                boomGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                boom.start(now); boom.stop(now + duration);
+
+                // Broadband noise rumble — lowpass sweeps from 1200 → 120 Hz so the
+                // initial crack is audible, then it settles into a rumble tail.
+                var bufSize = Math.floor(c.sampleRate * duration);
+                var buf = c.createBuffer(1, bufSize, c.sampleRate);
                 var data = buf.getChannelData(0);
                 for (var i = 0; i < bufSize; i++) {
                     data[i] = Math.random() * 2 - 1;
@@ -209,12 +223,13 @@ window.onload = function () {
                 src.buffer = buf;
                 var filter = c.createBiquadFilter();
                 filter.type = 'lowpass';
-                filter.frequency.value = 180;
-                var gain = c.createGain();
-                src.connect(filter); filter.connect(gain); gain.connect(c.destination);
-                gain.gain.setValueAtTime(vol, c.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-                src.start(); src.stop(c.currentTime + duration);
+                filter.frequency.setValueAtTime(1200, now);
+                filter.frequency.exponentialRampToValueAtTime(120, now + duration);
+                var noiseGain = c.createGain();
+                src.connect(filter); filter.connect(noiseGain); noiseGain.connect(c.destination);
+                noiseGain.gain.setValueAtTime(0.5 * vol, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                src.start(now); src.stop(now + duration);
             }
         };
     })();
