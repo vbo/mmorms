@@ -192,13 +192,13 @@ window.onload = function () {
                     var dx = myTank.x - ex, dy = myTank.y - ey;
                     dist = Math.sqrt(dx * dx + dy * dy);
                 }
-                var maxDist = 1000;
+                var maxDist = 700;
                 if (dist > maxDist) return;
-                // Cubic falloff concentrates the scary-loud zone to truly close hits;
-                // sizeFactor caps at 2 so big nearby blasts feel huge.
+                // Quartic falloff + tighter maxDist keeps the "scary loud" zone
+                // close to the player; mid-range blasts drop off steeply.
                 var t = 1 - dist / maxDist;
                 var sizeFactor = Math.min(radius / 50, 2.0);
-                var vol = Math.min(t * t * t * sizeFactor, 1.0);
+                var vol = Math.min(t * t * t * t * sizeFactor, 1.0);
                 if (vol < 0.02) return;
 
                 var now = c.currentTime;
