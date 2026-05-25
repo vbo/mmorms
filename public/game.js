@@ -193,8 +193,8 @@ window.onload = function () {
                 var dist = 0;
                 var dx = myTank.x - ex, dy = myTank.y - ey;
                 dist = Math.sqrt(dx * dx + dy * dy);
-                // maxDist=600 puts 350px at ~3% volume (t=0.417, t^4≈0.030).
-                var maxDist = 600;
+                // maxDist=700 puts 350px at ~6% volume (t=0.5, t^4≈0.0625).
+                var maxDist = 700;
                 if (dist > maxDist) return;
                 // Quartic falloff + tighter maxDist keeps the "scary loud" zone
                 // close to the player; mid-range blasts drop off steeply.
@@ -583,7 +583,13 @@ window.onload = function () {
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
+        var wasShieldOn = this.shield.visible;
         this.shield.visible = !!shield;
+        // Play shield sound only when MY shield actually toggles — cooldown
+        // presses don't toggle anything server-side, so no sound.
+        if (this.clientId == myClientId && wasShieldOn !== !!shield) {
+            SoundManager.shield();
+        }
         this.shieldBar.scaleX = shield ? shieldPercent : (1 - shieldPercent);
     }
 
@@ -1099,7 +1105,6 @@ window.onload = function () {
             me().gun.cache(0, 0, 100, 100);
         }
         if (keyCode == KEYCODE_Z) {
-            SoundManager.shield();
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHIELD);
@@ -1107,7 +1112,11 @@ window.onload = function () {
         }
         if (keyCode == KEYCODE_X) {
             SoundManager.stopChargeJump();
-            SoundManager.jump();
+            // Only play jump whoosh if the tank is actually on the ground —
+            // otherwise the jump message is a no-op server-side.
+            if (mapBitmap && isTankOnGround(mapBitmap, me().x, me().y)) {
+                SoundManager.jump();
+            }
             inputState.jumpPower = getPower(inputState.jumpPower, JUMP_POWERUP_SPEED);
             var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
