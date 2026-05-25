@@ -98,6 +98,19 @@ const MIN_NUM_PLAYERS = 5
 
 const TARGET_TICK_TIME = 50 * time.Millisecond
 
+// MAX_TICK_DT caps the simulated time per tick. If a tick stalls (GC,
+// scheduling, a syscall) and dtTotal grows large, the substep loop in
+// simulateWorld iterates dtTotal / 0.005s times and can take longer
+// than a tick by itself — pushing the next tick even further behind.
+// Clamp the simulated dt so we just drop simulation time instead of
+// snowballing into a spiral.
+const MAX_TICK_DT = 100 * time.Millisecond
+
+// LEADERBOARD_BROADCAST_PERIOD is how often the leaderboard is rebuilt
+// and sent. It barely changes between ticks; sending at 2 Hz instead
+// of 20 Hz cuts ~90% of its per-tick allocations.
+const LEADERBOARD_BROADCAST_PERIOD = 10
+
 var MAP_FILES = []string{
     "./public/islands_1.bmp",
     "./public/islands_2.bmp",
@@ -399,7 +412,9 @@ func gameLoop(net *Network) {
                     playerCount++
                 }
             }
-            updateOverlord(playerCount)
+            // Fire-and-forget: a slow or unreachable overlord must not
+            // stall the game loop for its HTTP round-trip.
+            go updateOverlord(playerCount)
         }
 
         // writing stats
@@ -661,7 +676,9 @@ func gameLoop(net *Network) {
 
         // Broadcast world snapshot
         broadcastMovables(tanks, clients, startTime)
-        broadcastLeaderboard(clients, startTime)
+        if curTick % LEADERBOARD_BROADCAST_PERIOD == 0 {
+            broadcastLeaderboard(clients, startTime)
+        }
 
         if newMapBitmap == nil && numGroundDestroyed > int(float64(mapBitmapPixelCount) * DESTROYED_FRACTION_TO_SPACE) {
             log.Println("Time to restart...")
@@ -676,6 +693,9 @@ func gameLoop(net *Network) {
 
         newTime := time.Now()
         dtTotal = newTime.Sub(startTime)
+        if dtTotal > MAX_TICK_DT {
+            dtTotal = MAX_TICK_DT
+        }
         startTime = newTime
         curTick++
 
