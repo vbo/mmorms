@@ -186,13 +186,13 @@ window.onload = function () {
 
             explosion: function (ex, ey, radius) {
                 var c = getCtx();
-                var dist = 0;
                 var myTank = me();
-                if (myTank) {
-                    var dx = myTank.x - ex, dy = myTank.y - ey;
-                    dist = Math.sqrt(dx * dx + dy * dy);
-                }
-                var maxDist = 350;
+                if (!myTank) return; // no sound on death/login screen
+                var dist = 0;
+                var dx = myTank.x - ex, dy = myTank.y - ey;
+                dist = Math.sqrt(dx * dx + dy * dy);
+                // maxDist=600 puts 350px at ~3% volume (t=0.417, t^4≈0.030).
+                var maxDist = 600;
                 if (dist > maxDist) return;
                 // Quartic falloff + tighter maxDist keeps the "scary loud" zone
                 // close to the player; mid-range blasts drop off steeply.
