@@ -424,10 +424,10 @@ func gameLoop(net *Network) {
             greetingMsg := createMsg(MSG_OUT_GREETING, startTime, 4)
             binary.LittleEndian.PutUint32(greetingMsg[MSG_HEADER_SIZE:], client.id)
             //log.Printf("Client %d connected.", client.id)
-            client.outgoing <- greetingMsg
-            client.outgoing <- mapBitmapBufferCopy
+            sendOrDrop(client, greetingMsg)
+            sendOrDrop(client, mapBitmapBufferCopy)
             if newMapBitmap != nil {
-                client.outgoing <- newMapBitmapArchive
+                sendOrDrop(client, newMapBitmapArchive)
             }
             //log.Println("Map & greetings sent")
             if !client.observer {
@@ -459,7 +459,7 @@ func gameLoop(net *Network) {
             mapArchiveSize := archiveMap(newMapBitmap[1:], newMapBitmapArchive[1:])
             newMapBitmapArchive = newMapBitmapArchive[0:mapArchiveSize + 1]
             for _,client := range clients {
-                client.outgoing <- newMapBitmapArchive
+                sendOrDrop(client, newMapBitmapArchive)
             }
             go func() {
                 time.Sleep(NEWMAP_TIMEOUT)
@@ -471,7 +471,7 @@ func gameLoop(net *Network) {
             mapChangeMsg := createMsg(MSG_OUT_MAP_CHANGE, startTime, 1)
             mapChangeMsg[MSG_HEADER_SIZE] = 1
             for _,client := range clients {
-                client.outgoing <- mapChangeMsg
+                sendOrDrop(client, mapChangeMsg)
             }
             spaceMode = true
             spaceStartTime = startTime
@@ -551,7 +551,7 @@ func gameLoop(net *Network) {
                             binary.LittleEndian.PutUint32(message[16:], math.Float32bits(float32(bullet.vx)))
                             binary.LittleEndian.PutUint32(message[20:], math.Float32bits(float32(bullet.vy)))
                             for _, client := range(clients) {
-                                client.outgoing <- messageBuffer
+                                sendOrDrop(client, messageBuffer)
                             }
                             //log.Printf("New wild bullet created %d", id)
                         }
@@ -637,7 +637,7 @@ func gameLoop(net *Network) {
                 mapChangeMsg := createMsg(MSG_OUT_MAP_CHANGE, startTime, 1)
                 mapChangeMsg[MSG_HEADER_SIZE] = 0
                 for _,client := range(clients) {
-                    client.outgoing <- mapChangeMsg
+                    sendOrDrop(client, mapChangeMsg)
                 }
             }
         }
@@ -748,7 +748,7 @@ func broadcastLeaderboard(clients map[uint32]*Client, startTime time.Time) {
         message = message[13 + nameLen:]
     }
     for _, client := range clients {
-        client.outgoing <- messageBuffer
+        sendOrDrop(client, messageBuffer)
     }
 }
 
@@ -787,7 +787,7 @@ func broadcastMovables(tanks map[uint32]*Movable, clients map[uint32]*Client, st
         message = message[28:]
     }
     for _, client := range clients {
-        client.outgoing <- stateMessageBuffer
+        sendOrDrop(client, stateMessageBuffer)
     }
 }
 
@@ -807,8 +807,8 @@ func broadcastDeath(id uint32, x float64, y float64, radius int32,
     binary.LittleEndian.PutUint32(message[4:], uint32(x))
     binary.LittleEndian.PutUint32(message[8:], uint32(y))
     binary.LittleEndian.PutUint32(message[12:], uint32(radius))
-    for clientId, _ := range clients {
-        clients[clientId].outgoing <- buffer
+    for _, client := range clients {
+        sendOrDrop(client, buffer)
     }
 }
 
