@@ -105,8 +105,15 @@ window.onload = function () {
                 var c = getCtx();
                 var maxSec = 10 / SHOOT_POWERUP_SPEED / 1000; // time to reach full charge
                 chargeWeaponOsc = c.createOscillator();
+                // Lowpass at 600 Hz strips the harsh upper sawtooth harmonics that
+                // phone speakers over-amplify vs desktop/headphones.
+                var chargeWeaponFilter = c.createBiquadFilter();
+                chargeWeaponFilter.type = 'lowpass';
+                chargeWeaponFilter.frequency.value = 600;
                 chargeWeaponGain = c.createGain();
-                chargeWeaponOsc.connect(chargeWeaponGain); chargeWeaponGain.connect(c.destination);
+                chargeWeaponOsc.connect(chargeWeaponFilter);
+                chargeWeaponFilter.connect(chargeWeaponGain);
+                chargeWeaponGain.connect(c.destination);
                 chargeWeaponOsc.type = 'sawtooth';
                 chargeWeaponOsc.frequency.setValueAtTime(180, c.currentTime);
                 chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + maxSec);
