@@ -95,7 +95,7 @@ window.onload = function () {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(180, c.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(35, c.currentTime + 0.18);
-                gain.gain.setValueAtTime(0.28, c.currentTime);
+                gain.gain.setValueAtTime(0.15, c.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.18);
                 osc.start(c.currentTime); osc.stop(c.currentTime + 0.18);
             },
@@ -162,7 +162,7 @@ window.onload = function () {
                     osc.type = 'square';
                     osc.frequency.value = freq;
                     var t = c.currentTime + i * 0.06;
-                    gain.gain.setValueAtTime(0.12, t);
+                    gain.gain.setValueAtTime(0.06, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
                     osc.start(t); osc.stop(t + 0.18);
                 });
@@ -192,10 +192,13 @@ window.onload = function () {
                     var dx = myTank.x - ex, dy = myTank.y - ey;
                     dist = Math.sqrt(dx * dx + dy * dy);
                 }
-                var maxDist = 1400;
+                var maxDist = 1000;
                 if (dist > maxDist) return;
-                var vol = (1 - dist / maxDist) * Math.min(radius / 50, 1.4);
-                if (vol < 0.03) return;
+                // Quadratic falloff — linear was too gentle; far blasts sounded as
+                // loud as close ones.
+                var t = 1 - dist / maxDist;
+                var vol = t * t * Math.min(radius / 50, 1.4);
+                if (vol < 0.02) return;
 
                 var now = c.currentTime;
                 var duration = 0.8;
