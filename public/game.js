@@ -103,14 +103,15 @@ window.onload = function () {
             startChargeWeapon: function () {
                 if (chargeWeaponOsc) return;
                 var c = getCtx();
+                var maxSec = 10 / SHOOT_POWERUP_SPEED / 1000; // time to reach full charge
                 chargeWeaponOsc = c.createOscillator();
                 chargeWeaponGain = c.createGain();
                 chargeWeaponOsc.connect(chargeWeaponGain); chargeWeaponGain.connect(c.destination);
                 chargeWeaponOsc.type = 'sawtooth';
                 chargeWeaponOsc.frequency.setValueAtTime(180, c.currentTime);
-                chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + 3);
+                chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + maxSec);
                 chargeWeaponGain.gain.setValueAtTime(0.005, c.currentTime);
-                chargeWeaponGain.gain.linearRampToValueAtTime(0.025, c.currentTime + 3);
+                chargeWeaponGain.gain.linearRampToValueAtTime(0.025, c.currentTime + maxSec);
                 chargeWeaponOsc.start(c.currentTime);
             },
 
@@ -123,14 +124,15 @@ window.onload = function () {
             startChargeJump: function () {
                 if (chargeJumpOsc) return;
                 var c = getCtx();
+                var maxSec = 10 / JUMP_POWERUP_SPEED / 1000; // time to reach full charge
                 chargeJumpOsc = c.createOscillator();
                 chargeJumpGain = c.createGain();
                 chargeJumpOsc.connect(chargeJumpGain); chargeJumpGain.connect(c.destination);
                 chargeJumpOsc.type = 'sine';
                 chargeJumpOsc.frequency.setValueAtTime(55, c.currentTime);
-                chargeJumpOsc.frequency.linearRampToValueAtTime(200, c.currentTime + 3);
+                chargeJumpOsc.frequency.linearRampToValueAtTime(200, c.currentTime + maxSec);
                 chargeJumpGain.gain.setValueAtTime(0.005, c.currentTime);
-                chargeJumpGain.gain.linearRampToValueAtTime(0.025, c.currentTime + 3);
+                chargeJumpGain.gain.linearRampToValueAtTime(0.025, c.currentTime + maxSec);
                 chargeJumpOsc.start(c.currentTime);
             },
 
@@ -148,7 +150,7 @@ window.onload = function () {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(90, c.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(420, c.currentTime + 0.45);
-                gain.gain.setValueAtTime(0.28, c.currentTime);
+                gain.gain.setValueAtTime(0.45, c.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.45);
                 osc.start(c.currentTime); osc.stop(c.currentTime + 0.45);
             },
