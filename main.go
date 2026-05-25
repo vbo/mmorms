@@ -675,25 +675,20 @@ func getNewMovablesPos(tanks map[uint32]*Movable, newMap []byte) map[uint32]floa
     for id, tank := range(tanks) {
         y := tank.y
         if (isGroundF(tank.x, y, newMap)) {
-            // Gettin up from the ground
-            for {
-                if isGroundF(tank.x, y, newMap) {
-                    y -= 1
-                } else {
-                    result[id] = y
-                    break
-                }
+            // Getting up from the ground. Cap at the top of the world so
+            // a tank wedged at x<=0 / x>=WIDTH (where isGroundF is always
+            // true) doesn't spin forever.
+            for y > 0 && isGroundF(tank.x, y, newMap) {
+                y -= 1
             }
+            result[id] = y
         } else {
-            // Falling down
-            for {
-                if !isGroundF(tank.x, y + 1, newMap) {
-                    y += 1
-                } else {
-                    result[id] = y
-                    break
-                }
+            // Falling down. Cap at the bottom of the world for the same
+            // reason as above.
+            for y < HEIGHT && !isGroundF(tank.x, y + 1, newMap) {
+                y += 1
             }
+            result[id] = y
         }
     }
     return result
