@@ -69,6 +69,157 @@ window.onload = function () {
 
     var utf8decoder = new TextDecoder("utf-8");
 
+    // ── Sound system (Web Audio API) ─────────────────────────────────────────
+    var SoundManager = (function () {
+        var ctx = null;
+        function getCtx() {
+            if (!ctx) {
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return ctx;
+        }
+        // Resume context on first user gesture (browser autoplay policy).
+        document.addEventListener('keydown', function () { getCtx().resume(); }, {once: true});
+        document.addEventListener('touchstart', function () { getCtx().resume(); }, {once: true});
+        document.addEventListener('mousedown', function () { getCtx().resume(); }, {once: true});
+
+        var chargeWeaponOsc = null, chargeWeaponGain = null;
+        var chargeJumpOsc = null, chargeJumpGain = null;
+
+        return {
+            shoot: function () {
+                var c = getCtx();
+                var osc = c.createOscillator();
+                var gain = c.createGain();
+                osc.connect(gain); gain.connect(c.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, c.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(35, c.currentTime + 0.18);
+                gain.gain.setValueAtTime(0.45, c.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.18);
+                osc.start(c.currentTime); osc.stop(c.currentTime + 0.18);
+            },
+
+            startChargeWeapon: function () {
+                if (chargeWeaponOsc) return;
+                var c = getCtx();
+                chargeWeaponOsc = c.createOscillator();
+                chargeWeaponGain = c.createGain();
+                chargeWeaponOsc.connect(chargeWeaponGain); chargeWeaponGain.connect(c.destination);
+                chargeWeaponOsc.type = 'sawtooth';
+                chargeWeaponOsc.frequency.setValueAtTime(180, c.currentTime);
+                chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + 3);
+                chargeWeaponGain.gain.setValueAtTime(0.04, c.currentTime);
+                chargeWeaponGain.gain.linearRampToValueAtTime(0.22, c.currentTime + 3);
+                chargeWeaponOsc.start(c.currentTime);
+            },
+
+            stopChargeWeapon: function () {
+                if (!chargeWeaponOsc) return;
+                try { chargeWeaponOsc.stop(); } catch (e) {}
+                chargeWeaponOsc = null; chargeWeaponGain = null;
+            },
+
+            startChargeJump: function () {
+                if (chargeJumpOsc) return;
+                var c = getCtx();
+                chargeJumpOsc = c.createOscillator();
+                chargeJumpGain = c.createGain();
+                chargeJumpOsc.connect(chargeJumpGain); chargeJumpGain.connect(c.destination);
+                chargeJumpOsc.type = 'sine';
+                chargeJumpOsc.frequency.setValueAtTime(55, c.currentTime);
+                chargeJumpOsc.frequency.linearRampToValueAtTime(200, c.currentTime + 3);
+                chargeJumpGain.gain.setValueAtTime(0.04, c.currentTime);
+                chargeJumpGain.gain.linearRampToValueAtTime(0.22, c.currentTime + 3);
+                chargeJumpOsc.start(c.currentTime);
+            },
+
+            stopChargeJump: function () {
+                if (!chargeJumpOsc) return;
+                try { chargeJumpOsc.stop(); } catch (e) {}
+                chargeJumpOsc = null; chargeJumpGain = null;
+            },
+
+            jump: function () {
+                var c = getCtx();
+                var osc = c.createOscillator();
+                var gain = c.createGain();
+                osc.connect(gain); gain.connect(c.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(90, c.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(420, c.currentTime + 0.45);
+                gain.gain.setValueAtTime(0.28, c.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.45);
+                osc.start(c.currentTime); osc.stop(c.currentTime + 0.45);
+            },
+
+            shield: function () {
+                var c = getCtx();
+                [440, 660, 880].forEach(function (freq, i) {
+                    var osc = c.createOscillator();
+                    var gain = c.createGain();
+                    osc.connect(gain); gain.connect(c.destination);
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+                    var t = c.currentTime + i * 0.06;
+                    gain.gain.setValueAtTime(0.12, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                    osc.start(t); osc.stop(t + 0.18);
+                });
+            },
+
+            frag: function () {
+                var c = getCtx();
+                [523, 659, 784, 1047].forEach(function (freq, i) {
+                    var osc = c.createOscillator();
+                    var gain = c.createGain();
+                    osc.connect(gain); gain.connect(c.destination);
+                    osc.type = 'sine';
+                    var t = c.currentTime + i * 0.13;
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.001, t);
+                    gain.gain.linearRampToValueAtTime(0.28, t + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+                    osc.start(t); osc.stop(t + 0.32);
+                });
+            },
+
+            explosion: function (ex, ey, radius) {
+                var c = getCtx();
+                var dist = 0;
+                var myTank = me();
+                if (myTank) {
+                    var dx = myTank.x - ex, dy = myTank.y - ey;
+                    dist = Math.sqrt(dx * dx + dy * dy);
+                }
+                var maxDist = 900;
+                if (dist > maxDist) return;
+                var vol = (1 - dist / maxDist) * Math.min(radius / 50, 1) * 0.55;
+                if (vol < 0.02) return;
+
+                var sampleRate = c.sampleRate;
+                var duration = 0.7;
+                var bufSize = Math.floor(sampleRate * duration);
+                var buf = c.createBuffer(1, bufSize, sampleRate);
+                var data = buf.getChannelData(0);
+                for (var i = 0; i < bufSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                var src = c.createBufferSource();
+                src.buffer = buf;
+                var filter = c.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 180;
+                var gain = c.createGain();
+                src.connect(filter); filter.connect(gain); gain.connect(c.destination);
+                gain.gain.setValueAtTime(vol, c.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+                src.start(); src.stop(c.currentTime + duration);
+            }
+        };
+    })();
+    // ─────────────────────────────────────────────────────────────────────────
+
     var conn;
 
     // NOTE(vbo): global, so we can call it from onclick
@@ -108,6 +259,7 @@ window.onload = function () {
 
     var mapSet = false;
     var spaceMode = false;
+    var myPrevLifeFrags = 0;
     var firstMessageServerTime = -1;
     var firstMessageClientTime = -1;
 
@@ -672,6 +824,12 @@ window.onload = function () {
                     if (tanks[id]) {
                         tanks[id].updateName(name, lifeFrags);
                     }
+                    if (id === myClientId && lifeFrags > myPrevLifeFrags && myPrevLifeFrags > 0) {
+                        SoundManager.frag();
+                    }
+                    if (id === myClientId) {
+                        myPrevLifeFrags = lifeFrags;
+                    }
                     leaderboard[i] = new LeaderboardEntry(id, name, lifeFrags);
                     p += 13 + nameLen;
                 }
@@ -704,6 +862,7 @@ window.onload = function () {
                     } else {
                         explodeAt(mapBitmap, x, y, radius);
                         if (radius > 20) {
+                            SoundManager.explosion(x, y, radius);
                             var explosion = new createjs.Bitmap("/explosion5.png");
                             explosion.scaleX = 0.1;
                             explosion.scaleY = 0.1;
@@ -736,6 +895,9 @@ window.onload = function () {
                     if (deadId == myClientId) {
                         inputState.shootPower = 0;
                         inputState.jumpPower = 0;
+                        SoundManager.stopChargeWeapon();
+                        SoundManager.stopChargeJump();
+                        myPrevLifeFrags = 0;
                         showLogin(tanks[deadId].lifeFrags);
                     }
                     delete tanks[deadId];
@@ -804,6 +966,7 @@ window.onload = function () {
         if (keyCode == KEYCODE_C) {
             if (inputState.shootPower == 0) {
                 inputState.shootPower = Date.now();
+                SoundManager.startChargeWeapon();
                 var updateShootProgress = function () {
                     if (inputState.shootPower == 0) {
                         return;
@@ -826,6 +989,7 @@ window.onload = function () {
         if (keyCode == KEYCODE_X) {
             if (inputState.jumpPower == 0) {
                 inputState.jumpPower = Date.now();
+                SoundManager.startChargeJump();
                 var updateJumpProgress = function () {
                     if (inputState.jumpPower == 0) {
                         return;
@@ -880,6 +1044,8 @@ window.onload = function () {
             inputState.changingAngle = 0;
         }
         if (keyCode == KEYCODE_C) {
+            SoundManager.stopChargeWeapon();
+            SoundManager.shoot();
             inputState.shootPower = getPower(inputState.shootPower, SHOOT_POWERUP_SPEED);
             var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
@@ -893,12 +1059,15 @@ window.onload = function () {
             me().gun.cache(0, 0, 100, 100);
         }
         if (keyCode == KEYCODE_Z) {
+            SoundManager.shield();
             var messageBuffer = new ArrayBuffer(1);
             var dataView = new DataView(messageBuffer);
             dataView.setUint8(0, MSG_OUT_SHIELD);
             conn.send(messageBuffer);
         }
         if (keyCode == KEYCODE_X) {
+            SoundManager.stopChargeJump();
+            SoundManager.jump();
             inputState.jumpPower = getPower(inputState.jumpPower, JUMP_POWERUP_SPEED);
             var messageBuffer = new ArrayBuffer(2);
             var dataView = new DataView(messageBuffer);
