@@ -166,7 +166,7 @@ func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     var pingsi = 0
     var avgping float64
 
-    conn.SetReadLimit(MESSAGE_QUEUE_SIZE)
+    conn.SetReadLimit(MAX_MESSAGE_SIZE)
 
     // Accept new messages in a separate goroutine:
     // 1. The ReadMessage call blocks, so I don't see other choice.
