@@ -298,6 +298,8 @@ window.onload = function () {
     // ─────────────────────────────────────────────────────────────────────────
 
     var conn;
+    var senderIntervalID = null;
+    var reconnectScheduled = false;
 
     // NOTE(vbo): global, so we can call it from onclick
     window.sendStart = function (login) {
@@ -809,12 +811,13 @@ window.onload = function () {
         conn = new WebSocket(gameServerWSUrl);
         conn.binaryType = "arraybuffer";
         conn.onclose = function (evt) {
-            console.log("Connection closed")
+            console.log("Connection closed");
+            handleDisconnect();
         };
         conn.onerror = function (evt) {
-            // TODO(vbo): handle disconnection gracefully
             console.log("Connection failed unexpectedly");
             console.log(evt);
+            handleDisconnect();
         };
         conn.onmessage = function (evt) {
             var dataView = new DataView(evt.data);
@@ -1016,7 +1019,10 @@ window.onload = function () {
             }
         };
 
-        setInterval(function() { // Sending packets to server
+        if (senderIntervalID !== null) {
+            clearInterval(senderIntervalID);
+        }
+        senderIntervalID = setInterval(function() { // Sending packets to server
               var messageBuffer = new ArrayBuffer(6);
               var dataView = new DataView(messageBuffer);
               dataView.setUint8(0, MSG_OUT_MOVING);
@@ -1401,6 +1407,72 @@ window.onload = function () {
             connectToGameServer(bestServer);
         });
     };
+
+    // Tear down all per-session client state so a fresh connection starts clean.
+    var resetSessionState = function () {
+        for (var tid in tanks) {
+            tanks[tid].destroy();
+        }
+        tanks = {};
+        for (var bid in bullets) {
+            render.stage.removeChild(bullets[bid].shape);
+        }
+        bullets = {};
+        if (newMapBitmapFadeInIntervalID) {
+            newMapBitmapFadeInIntervalID = clearInterval(newMapBitmapFadeInIntervalID);
+        }
+        newMapBitmap = undefined;
+        mapBitmap = undefined;
+        surfaceY = null;
+        mapSet = false;
+        spaceMode = false;
+        myClientId = undefined;
+        myPrevLifeFrags = 0;
+        firstMessageServerTime = -1;
+        firstMessageClientTime = -1;
+        inputState.moving = 0;
+        inputState.changingAngle = 0;
+        inputState.wasMoving = 0;
+        inputState.wasChangingAngle = 0;
+        inputState.startChangingAngle = 0;
+        inputState.shootPower = 0;
+        inputState.jumpPower = 0;
+        SoundManager.stopChargeWeapon();
+        SoundManager.stopChargeJump();
+    };
+
+    var handleDisconnect = function () {
+        if (reconnectScheduled) {
+            return;
+        }
+        reconnectScheduled = true;
+        if (senderIntervalID !== null) {
+            senderIntervalID = clearInterval(senderIntervalID);
+        }
+        resetSessionState();
+        showLogin();
+        // Only attempt to reconnect when the tab is actually visible; otherwise
+        // wait for the visibilitychange handler to kick things off. This avoids
+        // hammering the server while the tab is backgrounded on mobile.
+        if (typeof document.hidden === "boolean" && document.hidden) {
+            reconnectScheduled = false;
+            return;
+        }
+        setTimeout(function () {
+            reconnectScheduled = false;
+            startConnectionPipeline();
+        }, 1000);
+    };
+
+    document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+            return;
+        }
+        if (!conn || conn.readyState === WebSocket.CLOSED || conn.readyState === WebSocket.CLOSING) {
+            handleDisconnect();
+        }
+    });
+
     startConnectionPipeline();
 };
 
