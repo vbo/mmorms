@@ -213,7 +213,7 @@ func simulateWorld(
                     tank.vx = 0
                 }
                 tank.y += tank.vy * dt
-                if outOfScreenX(tank.y, tank.vy) {
+                if outOfScreenY(tank.y, tank.vy) {
                     tank.y = oldY
                     tank.vy = 0
                 }
