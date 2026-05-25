@@ -928,9 +928,9 @@ window.onload = function () {
         var buttons = [
             // label, keyCode, anchor side, x offset (from side), bottom offset
             {label: "◀", code: KEYCODE_LEFT,  side: "left",  x: 16,  y: 20},
-            {label: "▶", code: KEYCODE_RIGHT, side: "left",  x: 96,  y: 20},
-            {label: "▼", code: KEYCODE_DOWN,  side: "left",  x: 180, y: 20},
-            {label: "▲", code: KEYCODE_UP,    side: "left",  x: 180, y: 100},
+            {label: "▼", code: KEYCODE_DOWN,  side: "left",  x: 96,  y: 20},
+            {label: "▲", code: KEYCODE_UP,    side: "left",  x: 96,  y: 100},
+            {label: "▶", code: KEYCODE_RIGHT, side: "left",  x: 176, y: 20},
             {label: "Z", code: KEYCODE_Z, side: "right", x: 180, y: 20},
             {label: "X", code: KEYCODE_X, side: "right", x: 96,  y: 20},
             {label: "C", code: KEYCODE_C, side: "right", x: 16,  y: 20},
