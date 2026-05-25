@@ -194,45 +194,65 @@ window.onload = function () {
                 }
                 var maxDist = 1000;
                 if (dist > maxDist) return;
-                // Quadratic falloff — linear was too gentle; far blasts sounded as
-                // loud as close ones.
+                // Cubic falloff concentrates the scary-loud zone to truly close hits;
+                // sizeFactor caps at 2 so big nearby blasts feel huge.
                 var t = 1 - dist / maxDist;
-                var vol = t * t * Math.min(radius / 50, 1.4);
+                var sizeFactor = Math.min(radius / 50, 2.0);
+                var vol = Math.min(t * t * t * sizeFactor, 1.0);
                 if (vol < 0.02) return;
 
                 var now = c.currentTime;
-                var duration = 0.8;
+                var duration = 1.0;
 
-                // Low-freq "boom" body — sine sweeping down gives the punch.
+                // Low-freq "boom" body — pushed past unity so close hits saturate
+                // the bus; the resulting soft clipping is part of the violence.
                 var boom = c.createOscillator();
                 var boomGain = c.createGain();
                 boom.connect(boomGain); boomGain.connect(c.destination);
                 boom.type = 'sine';
-                boom.frequency.setValueAtTime(160, now);
-                boom.frequency.exponentialRampToValueAtTime(30, now + 0.35);
-                boomGain.gain.setValueAtTime(0.7 * vol, now);
+                boom.frequency.setValueAtTime(180, now);
+                boom.frequency.exponentialRampToValueAtTime(25, now + 0.4);
+                boomGain.gain.setValueAtTime(1.5 * vol, now);
                 boomGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
                 boom.start(now); boom.stop(now + duration);
 
-                // Broadband noise rumble — lowpass sweeps from 1200 → 120 Hz so the
-                // initial crack is audible, then it settles into a rumble tail.
+                // Lowpass-swept noise rumble (1.5 kHz → 100 Hz over the tail).
                 var bufSize = Math.floor(c.sampleRate * duration);
-                var buf = c.createBuffer(1, bufSize, c.sampleRate);
-                var data = buf.getChannelData(0);
+                var rumbleBuf = c.createBuffer(1, bufSize, c.sampleRate);
+                var rumbleData = rumbleBuf.getChannelData(0);
                 for (var i = 0; i < bufSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
+                    rumbleData[i] = Math.random() * 2 - 1;
                 }
-                var src = c.createBufferSource();
-                src.buffer = buf;
-                var filter = c.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(1200, now);
-                filter.frequency.exponentialRampToValueAtTime(120, now + duration);
-                var noiseGain = c.createGain();
-                src.connect(filter); filter.connect(noiseGain); noiseGain.connect(c.destination);
-                noiseGain.gain.setValueAtTime(0.5 * vol, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-                src.start(now); src.stop(now + duration);
+                var rumbleSrc = c.createBufferSource();
+                rumbleSrc.buffer = rumbleBuf;
+                var rumbleFilter = c.createBiquadFilter();
+                rumbleFilter.type = 'lowpass';
+                rumbleFilter.frequency.setValueAtTime(1500, now);
+                rumbleFilter.frequency.exponentialRampToValueAtTime(100, now + duration);
+                var rumbleGain = c.createGain();
+                rumbleSrc.connect(rumbleFilter); rumbleFilter.connect(rumbleGain); rumbleGain.connect(c.destination);
+                rumbleGain.gain.setValueAtTime(1.0 * vol, now);
+                rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                rumbleSrc.start(now); rumbleSrc.stop(now + duration);
+
+                // Sharp high-frequency CRACK at t=0 — the startle transient.
+                var crackDur = 0.08;
+                var crackSize = Math.floor(c.sampleRate * crackDur);
+                var crackBuf = c.createBuffer(1, crackSize, c.sampleRate);
+                var crackData = crackBuf.getChannelData(0);
+                for (var j = 0; j < crackSize; j++) {
+                    crackData[j] = Math.random() * 2 - 1;
+                }
+                var crackSrc = c.createBufferSource();
+                crackSrc.buffer = crackBuf;
+                var crackFilter = c.createBiquadFilter();
+                crackFilter.type = 'highpass';
+                crackFilter.frequency.value = 1500;
+                var crackGain = c.createGain();
+                crackSrc.connect(crackFilter); crackFilter.connect(crackGain); crackGain.connect(c.destination);
+                crackGain.gain.setValueAtTime(0.9 * vol, now);
+                crackGain.gain.exponentialRampToValueAtTime(0.001, now + crackDur);
+                crackSrc.start(now); crackSrc.stop(now + crackDur);
             }
         };
     })();
