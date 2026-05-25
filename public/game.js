@@ -1319,18 +1319,9 @@ window.onload = function () {
         render.updateMapCanvasPartial(mapBitmap, sx, sy, 2*r, 2*r);
     }
 
-    var fpsLabel = new createjs.Text("60", "9px Roboto", "Red");
-    fpsLabel.textAlign = "end";
-    fpsLabel.x = 1260 - 1;
-    render.stage.addChild(fpsLabel);
-
     // Render loop.
-    var startTime = performance.now();
-    var i = 0;
-    var deltas = [];
     createjs.Ticker.on("tick", tick);
     createjs.Ticker.setFPS(30);
-    var deltaTime = 0;
     function tick(evt) {
         var curTime = performance.now();
         var dtMs = evt && typeof evt.delta === "number" ? evt.delta : (1000 / 30);
@@ -1342,22 +1333,7 @@ window.onload = function () {
         for (var tid in tanks) {
             tanks[tid].updateBodyTilt(mapBitmap, spaceMode, dtSec);
         }
-        //changeAngle(inputState.changingAngle, 0.04 * deltaTime);
         render.redraw();
-        var endTime = performance.now();
-        deltaTime = endTime - startTime;
-        startTime = endTime;
-        fpsLabel.text = (1000/average(deltas))|0;
-        deltas[i%8] = deltaTime;
-        i++;
-    }
-
-    function average(xs) {
-        var s = 0;
-        for (var i = 0; i < xs.length; ++i) {
-            s += xs[i];
-        }
-        return s/xs.length;
     }
 
     var wsProtocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
