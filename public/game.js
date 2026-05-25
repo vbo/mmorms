@@ -192,7 +192,7 @@ window.onload = function () {
                     var dx = myTank.x - ex, dy = myTank.y - ey;
                     dist = Math.sqrt(dx * dx + dy * dy);
                 }
-                var maxDist = 700;
+                var maxDist = 350;
                 if (dist > maxDist) return;
                 // Quartic falloff + tighter maxDist keeps the "scary loud" zone
                 // close to the player; mid-range blasts drop off steeply.
