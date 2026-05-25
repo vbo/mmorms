@@ -18,7 +18,12 @@ func createBot(net *Network, deletionChan chan bool) {
         observer: true,
         isBot: true,
     }
-    net.connect <- client
+    select {
+    case net.connect <- client:
+    default:
+        log.Println("Bot connect dropped: connect queue full")
+        return
+    }
     log.Println("Bot client connecting...")
     input := client.outgoing
     output := translateOutputChannel(client, net.incoming, net.disconnect)

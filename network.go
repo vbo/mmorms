@@ -107,6 +107,19 @@ type Message struct {
     ping float64
 }
 
+// sendOrDrop pushes a message onto a client's outgoing queue without
+// blocking. If the queue is full, the message is dropped: better to
+// skip a frame for one lagged client than to stall the whole game loop
+// (which broadcasts to every client every tick). A client whose
+// connection is genuinely broken will be torn down by the pong / write
+// deadlines.
+func sendOrDrop(c *Client, msg []byte) {
+    select {
+    case c.outgoing <- msg:
+    default:
+    }
+}
+
 func serveWebsocket(net *Network, w http.ResponseWriter, r *http.Request) {
     // This will be called in a pre-connection goroutine.
     // NOTE(vbo): ignore origin mismatch.
