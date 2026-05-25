@@ -72,11 +72,29 @@ window.onload = function () {
     // ── Sound system (Web Audio API) ─────────────────────────────────────────
     var SoundManager = (function () {
         var ctx = null;
+        var master = null;
         function getCtx() {
             if (!ctx) {
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
             }
             return ctx;
+        }
+        // Master bus: a DynamicsCompressor catches any sound that gets boosted by
+        // a particular device's speaker EQ (e.g. iPhone amplifies sawtooth/square
+        // harmonics far more than desktop), keeping the relative balance closer
+        // to what was designed on the dev machine.
+        function getMaster() {
+            if (!master) {
+                var c = getCtx();
+                master = c.createDynamicsCompressor();
+                master.threshold.value = -6;
+                master.knee.value = 8;
+                master.ratio.value = 4;
+                master.attack.value = 0.003;
+                master.release.value = 0.2;
+                master.connect(c.destination);
+            }
+            return master;
         }
         // Resume context on first user gesture (browser autoplay policy).
         document.addEventListener('keydown', function () { getCtx().resume(); }, {once: true});
@@ -90,8 +108,12 @@ window.onload = function () {
             shoot: function () {
                 var c = getCtx();
                 var osc = c.createOscillator();
+                // Lowpass tames sawtooth harmonics that iPhone speakers over-boost.
+                var filter = c.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 600;
                 var gain = c.createGain();
-                osc.connect(gain); gain.connect(c.destination);
+                osc.connect(filter); filter.connect(gain); gain.connect(getMaster());
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(180, c.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(35, c.currentTime + 0.18);
@@ -113,7 +135,7 @@ window.onload = function () {
                 chargeWeaponGain = c.createGain();
                 chargeWeaponOsc.connect(chargeWeaponFilter);
                 chargeWeaponFilter.connect(chargeWeaponGain);
-                chargeWeaponGain.connect(c.destination);
+                chargeWeaponGain.connect(getMaster());
                 chargeWeaponOsc.type = 'sawtooth';
                 chargeWeaponOsc.frequency.setValueAtTime(180, c.currentTime);
                 chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + maxSec);
@@ -134,7 +156,7 @@ window.onload = function () {
                 var maxSec = 10 / JUMP_POWERUP_SPEED / 1000; // time to reach full charge
                 chargeJumpOsc = c.createOscillator();
                 chargeJumpGain = c.createGain();
-                chargeJumpOsc.connect(chargeJumpGain); chargeJumpGain.connect(c.destination);
+                chargeJumpOsc.connect(chargeJumpGain); chargeJumpGain.connect(getMaster());
                 chargeJumpOsc.type = 'sine';
                 chargeJumpOsc.frequency.setValueAtTime(55, c.currentTime);
                 chargeJumpOsc.frequency.linearRampToValueAtTime(200, c.currentTime + maxSec);
@@ -153,7 +175,7 @@ window.onload = function () {
                 var c = getCtx();
                 var osc = c.createOscillator();
                 var gain = c.createGain();
-                osc.connect(gain); gain.connect(c.destination);
+                osc.connect(gain); gain.connect(getMaster());
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(90, c.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(420, c.currentTime + 0.45);
@@ -164,10 +186,17 @@ window.onload = function () {
 
             shield: function () {
                 var c = getCtx();
+                // Single shared lowpass tames the square waves' high harmonics
+                // (which iPhone speakers over-amplify) while keeping enough bite
+                // to still read as a "buzz."
+                var filter = c.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 1500;
+                filter.connect(getMaster());
                 [440, 660, 880].forEach(function (freq, i) {
                     var osc = c.createOscillator();
                     var gain = c.createGain();
-                    osc.connect(gain); gain.connect(c.destination);
+                    osc.connect(gain); gain.connect(filter);
                     osc.type = 'square';
                     osc.frequency.value = freq;
                     var t = c.currentTime + i * 0.06;
@@ -182,7 +211,7 @@ window.onload = function () {
                 [523, 659, 784, 1047].forEach(function (freq, i) {
                     var osc = c.createOscillator();
                     var gain = c.createGain();
-                    osc.connect(gain); gain.connect(c.destination);
+                    osc.connect(gain); gain.connect(getMaster());
                     osc.type = 'sine';
                     var t = c.currentTime + i * 0.13;
                     osc.frequency.value = freq;
@@ -212,12 +241,13 @@ window.onload = function () {
 
                 var now = c.currentTime;
                 var duration = 1.0;
+                var mst = getMaster();
 
                 // Low-freq "boom" body — pushed past unity so close hits saturate
                 // the bus; the resulting soft clipping is part of the violence.
                 var boom = c.createOscillator();
                 var boomGain = c.createGain();
-                boom.connect(boomGain); boomGain.connect(c.destination);
+                boom.connect(boomGain); boomGain.connect(mst);
                 boom.type = 'sine';
                 boom.frequency.setValueAtTime(180, now);
                 boom.frequency.exponentialRampToValueAtTime(25, now + 0.4);
@@ -239,7 +269,7 @@ window.onload = function () {
                 rumbleFilter.frequency.setValueAtTime(1500, now);
                 rumbleFilter.frequency.exponentialRampToValueAtTime(100, now + duration);
                 var rumbleGain = c.createGain();
-                rumbleSrc.connect(rumbleFilter); rumbleFilter.connect(rumbleGain); rumbleGain.connect(c.destination);
+                rumbleSrc.connect(rumbleFilter); rumbleFilter.connect(rumbleGain); rumbleGain.connect(mst);
                 rumbleGain.gain.setValueAtTime(1.0 * vol, now);
                 rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
                 rumbleSrc.start(now); rumbleSrc.stop(now + duration);
@@ -258,7 +288,7 @@ window.onload = function () {
                 crackFilter.type = 'highpass';
                 crackFilter.frequency.value = 1500;
                 var crackGain = c.createGain();
-                crackSrc.connect(crackFilter); crackFilter.connect(crackGain); crackGain.connect(c.destination);
+                crackSrc.connect(crackFilter); crackFilter.connect(crackGain); crackGain.connect(mst);
                 crackGain.gain.setValueAtTime(0.9 * vol, now);
                 crackGain.gain.exponentialRampToValueAtTime(0.001, now + crackDur);
                 crackSrc.start(now); crackSrc.stop(now + crackDur);
