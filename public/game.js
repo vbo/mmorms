@@ -59,9 +59,11 @@ window.onload = function () {
     /** Damping (1/s); ~2*sqrt(BODY_TILT_SPRING) ≈ critical. */
     var BODY_TILT_DAMPING = 19;
     /** Ignore raw terrain tilt steps smaller than this (reduces pixel jitter). */
-    var BODY_TILT_DEADZONE_DEG = 2.5;
+    var BODY_TILT_DEADZONE_DEG = 0.5;
     /** Seconds; low-pass time constant on terrain target before the spring. */
     var BODY_TILT_TARGET_TAU_SEC = 0.055;
+    /** Reject sampled surface pixels this far above/below the tread line (overhangs, crater rims). */
+    var BODY_TILT_SURFACE_WINDOW_PX = 12;
 
     var INTERPOLATION_ENABLED = true;
 
@@ -99,6 +101,8 @@ window.onload = function () {
     var tanks = {};
     var bullets = {};
     var mapBitmap;
+    /** Cached topmost solid y per column (-1 if none). Rebuilt on map load, patched on explosion. */
+    var surfaceY = null;
     var newMapBitmap;
     var newMapBitmapFadeInIntervalID;
 
@@ -124,17 +128,44 @@ window.onload = function () {
         return tanks[myClientId];
     }
 
-    /** Topmost solid pixel y in column cx, or -1 if none (air column). */
-    function surfaceYAtColumn(mapBitmap, cx) {
-        if (!mapBitmap || cx < 0 || cx >= WIDTH) {
+    /** Topmost solid pixel y in column cx, or -1 if none (air column). Reads the cache. */
+    function surfaceYAtColumn(cx) {
+        if (!surfaceY || cx < 0 || cx >= WIDTH) {
             return -1;
         }
-        for (var y = 0; y < HEIGHT; y++) {
-            if (mapBitmap[cx + y * WIDTH] === 1) {
-                return y;
-            }
+        return surfaceY[cx];
+    }
+
+    /** Rescan columns [sx, lx) in the current mapBitmap and refresh the surface-y cache. */
+    function refreshSurfaceYRange(sx, lx) {
+        if (!mapBitmap) {
+            return;
         }
-        return -1;
+        if (!surfaceY || surfaceY.length !== WIDTH) {
+            surfaceY = new Int16Array(WIDTH);
+        }
+        if (sx < 0) { sx = 0; }
+        if (lx > WIDTH) { lx = WIDTH; }
+        for (var col = sx; col < lx; col++) {
+            var found = -1;
+            var base = col;
+            for (var yy = 0; yy < HEIGHT; yy++) {
+                if (mapBitmap[base] === 1) {
+                    found = yy;
+                    break;
+                }
+                base += WIDTH;
+            }
+            surfaceY[col] = found;
+        }
+    }
+
+    function rebuildSurfaceY() {
+        if (!mapBitmap) {
+            surfaceY = null;
+            return;
+        }
+        refreshSurfaceYRange(0, WIDTH);
     }
 
     /** Same foot probe as server isGroundF(tank.x, tank.y + 1). */
@@ -195,8 +226,11 @@ window.onload = function () {
         }
 
         // Multi-point line fit y(col) => slope dy/dx
-        // Using more points reduces crater/pixel jitter while staying in the rear-half window.
-        var N = 5; // 5 samples is a good cost/quality trade-off
+        // Cheap thanks to the surface-y cache, so we sample densely; reject samples
+        // far above/below the tread line to ignore overhangs and crater rims.
+        var N = 11;
+        var tyMin = tank.y - BODY_TILT_SURFACE_WINDOW_PX;
+        var tyMax = tank.y + BODY_TILT_SURFACE_WINDOW_PX;
         var sumX = 0, sumY = 0, sumXX = 0, sumXY = 0, count = 0;
         var prevCol = null;
         for (var i = 0; i < N; i++) {
@@ -206,8 +240,9 @@ window.onload = function () {
             if (prevCol === col) continue; // avoid duplicates after rounding
             prevCol = col;
 
-            var y = surfaceYAtColumn(mapBitmap, col);
+            var y = surfaceYAtColumn(col);
             if (y < 0) continue;
+            if (y < tyMin || y > tyMax) continue;
 
             sumX += col;
             sumY += y;
@@ -556,8 +591,9 @@ window.onload = function () {
                     }, 50);
                 } else {
                     mapSet = true;
-                    mapBitmap = new DataView(evt.data, headerSize); 
+                    mapBitmap = new DataView(evt.data, headerSize);
                     mapBitmap = dearchive(mapBitmap);
+                    rebuildSurfaceY();
                     render.updateMapCanvas(mapBitmap);
                 }
                 break;
@@ -578,6 +614,7 @@ window.onload = function () {
                 } else {
                     spaceMode = false;
                     mapBitmap = newMapBitmap;
+                    rebuildSurfaceY();
                     if (newMapBitmapFadeInIntervalID) {
                         newMapBitmapFadeInIntervalID = clearInterval(
                             newMapBitmapFadeInIntervalID);
@@ -883,6 +920,7 @@ window.onload = function () {
                 }
             }
         }
+        refreshSurfaceYRange(sx, lx);
         render.updateMapCanvasPartial(mapBitmap, sx, sy, 2*r, 2*r);
     }
 
