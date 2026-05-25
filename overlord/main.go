@@ -73,7 +73,7 @@ func serveUpdate(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-const MESSAGE_QUEUE_SIZE = 256
+const MAX_MESSAGE_SIZE = 1024
 const PONG_TIMEOUT = 10 * time.Second
 const WRITE_TIMEOUT = 5 * time.Second
 const PING_PERIOD = 1 * time.Second
@@ -94,7 +94,7 @@ func serveWebsocket(w http.ResponseWriter, r *http.Request) {
 	}
     defer conn.Close()
 
-    conn.SetReadLimit(MESSAGE_QUEUE_SIZE)
+    conn.SetReadLimit(MAX_MESSAGE_SIZE)
     go func () {
         defer conn.Close()
         delayReadDeadline := func () { conn.SetReadDeadline(time.Now().Add(PONG_TIMEOUT)) }
