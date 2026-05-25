@@ -109,8 +109,8 @@ window.onload = function () {
                 chargeWeaponOsc.type = 'sawtooth';
                 chargeWeaponOsc.frequency.setValueAtTime(180, c.currentTime);
                 chargeWeaponOsc.frequency.linearRampToValueAtTime(700, c.currentTime + 3);
-                chargeWeaponGain.gain.setValueAtTime(0.04, c.currentTime);
-                chargeWeaponGain.gain.linearRampToValueAtTime(0.22, c.currentTime + 3);
+                chargeWeaponGain.gain.setValueAtTime(0.02, c.currentTime);
+                chargeWeaponGain.gain.linearRampToValueAtTime(0.11, c.currentTime + 3);
                 chargeWeaponOsc.start(c.currentTime);
             },
 
@@ -129,8 +129,8 @@ window.onload = function () {
                 chargeJumpOsc.type = 'sine';
                 chargeJumpOsc.frequency.setValueAtTime(55, c.currentTime);
                 chargeJumpOsc.frequency.linearRampToValueAtTime(200, c.currentTime + 3);
-                chargeJumpGain.gain.setValueAtTime(0.04, c.currentTime);
-                chargeJumpGain.gain.linearRampToValueAtTime(0.22, c.currentTime + 3);
+                chargeJumpGain.gain.setValueAtTime(0.02, c.currentTime);
+                chargeJumpGain.gain.linearRampToValueAtTime(0.11, c.currentTime + 3);
                 chargeJumpOsc.start(c.currentTime);
             },
 
