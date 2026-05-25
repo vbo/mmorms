@@ -361,9 +361,31 @@ window.onload = function () {
     labelOverlay.style.cssText =
         "position: fixed; left: 0; top: 0; width: 0; height: 0;" +
         " pointer-events: none; z-index: 10;" +
-        " font-family: Roboto, sans-serif; font-weight: 400;" +
+        " font-family: 'Black Ops One', 'Russo One', 'Impact', sans-serif;" +
         " -webkit-font-smoothing: antialiased;";
     document.body.appendChild(labelOverlay);
+
+    // 4-direction black outline scaled to font size so labels stay legible
+    // against any background (sky, terrain, explosions).
+    var LABEL_OUTLINE =
+        "-0.08em 0 0 #000, 0.08em 0 0 #000," +
+        " 0 -0.08em 0 #000, 0 0.08em 0 #000," +
+        " -0.06em -0.06em 0 #000, 0.06em -0.06em 0 #000," +
+        " -0.06em 0.06em 0 #000, 0.06em 0.06em 0 #000";
+
+    function hpColor(hp, maxHp) {
+        var ratio = maxHp > 0 ? hp / maxHp : 0;
+        if (ratio > 0.66) { return "#7ee07e"; }
+        if (ratio > 0.33) { return "#ffd84a"; }
+        return "#ff5050";
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
 
     var labelMetrics = { scale: 1, offsetX: 0, offsetY: 0 };
     function updateLabelMetrics() {
@@ -568,8 +590,11 @@ window.onload = function () {
         this.hpLabel.visible = false;
         this.hpLabelEl = document.createElement("div");
         this.hpLabelEl.style.cssText =
-            "position: absolute; left: 0; top: 0; color: red;" +
+            "position: absolute; left: 0; top: 0;" +
+            " color: " + hpColor(this.hp, this.maxHp) + ";" +
             " text-align: center; white-space: nowrap;" +
+            " letter-spacing: 0.04em;" +
+            " text-shadow: " + LABEL_OUTLINE + ";" +
             " transform: translate(-9999px, -9999px);" +
             " transform-origin: 0 0; will-change: transform;";
         this.hpLabelEl.textContent = String(this.hp);
@@ -615,8 +640,11 @@ window.onload = function () {
         this.nickLabel.visible = false;
         this.nickLabelEl = document.createElement("div");
         this.nickLabelEl.style.cssText =
-            "position: absolute; left: 0; top: 0; color: red;" +
+            "position: absolute; left: 0; top: 0;" +
+            " color: #f0e6c0;" +
             " text-align: center; white-space: nowrap;" +
+            " letter-spacing: 0.06em;" +
+            " text-shadow: " + LABEL_OUTLINE + ";" +
             " overflow: hidden; text-overflow: ellipsis;" +
             " transform: translate(-9999px, -9999px);" +
             " transform-origin: 0 0; will-change: transform;";
@@ -694,7 +722,11 @@ window.onload = function () {
         this.shape.x = this.x;
         this.shape.y = this.y;
         this.hpLabel.text = this.hp;
-        if (this.hpLabelEl) { this.hpLabelEl.textContent = String(this.hp); }
+        if (hp > this.maxHp) { this.maxHp = hp; }
+        if (this.hpLabelEl) {
+            this.hpLabelEl.textContent = String(this.hp);
+            this.hpLabelEl.style.color = hpColor(this.hp, this.maxHp);
+        }
         var wasShieldOn = this.shield.visible;
         this.shield.visible = !!shield;
         // Use object identity (this === me()) rather than clientId == myClientId
@@ -742,21 +774,30 @@ window.onload = function () {
 
     Tank.prototype.updateName = function (name, lifeFrags) {
         this.lifeFrags = lifeFrags;
-        if (lifeFrags > 0) {
-            name += " ";
-        }
+        var baseName = name;
+        var stars = "";
+        var remaining = lifeFrags;
         var required = 1;
-        while (lifeFrags > 0) {
-            if (lifeFrags >= required) {
-                name += "★";
-                lifeFrags -= required;
+        while (remaining > 0) {
+            if (remaining >= required) {
+                stars += "★";
+                remaining -= required;
                 required *= 2;
             } else {
                 break;
             }
         }
-        this.nickLabel.text = name;
-        if (this.nickLabelEl) { this.nickLabelEl.textContent = name; }
+        this.nickLabel.text = stars ? baseName + " " + stars : baseName;
+        if (this.nickLabelEl) {
+            var isMe = (typeof me === "function") && (this === me());
+            this.nickLabelEl.style.color = isMe ? "#ffd84a" : "#f0e6c0";
+            var html = escapeHtml(baseName);
+            if (stars) {
+                html += ' <span style="color: #ffd54a">' +
+                    stars + "</span>";
+            }
+            this.nickLabelEl.innerHTML = html;
+        }
     }
 
     Tank.prototype.destroy = function() {
