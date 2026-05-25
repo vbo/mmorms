@@ -977,6 +977,19 @@ window.onload = function () {
         };
         refresh();
         new MutationObserver(refresh).observe(overlay, {attributes: true, attributeFilter: ["style"]});
+
+        if (window.visualViewport) {
+            var vv = window.visualViewport;
+            var syncToViewport = function () {
+                root.style.transformOrigin = "0 0";
+                root.style.transform =
+                    "translate(" + vv.offsetLeft + "px, " + vv.offsetTop + "px)" +
+                    " scale(" + (1 / vv.scale) + ")";
+            };
+            syncToViewport();
+            vv.addEventListener("resize", syncToViewport);
+            vv.addEventListener("scroll", syncToViewport);
+        }
     }
     setupTouchControls();
 
