@@ -696,13 +696,26 @@ window.onload = function () {
         this.id = id;
         this.ownerId = ownerId;
         this.creationTime = creationTime;
+        var isMine = (typeof myClientId !== 'undefined') && ownerId == myClientId;
+        var tipColor = isMine ? "#FFD24A" : "#FF3B30";
+        var bodyColor = isMine ? "#4A4A4A" : "#3A2A2A";
+        var outline = isMine ? "#6A4A00" : "#4A0000";
+        var tracer = isMine ? "#FFF1A8" : "#FFB0A8";
         this.shape = new createjs.Shape();
-        this.shape.graphics.beginFill("Red").drawCircle(0, 0, 5);
+        var g = this.shape.graphics;
+        g.setStrokeStyle(0.5).beginStroke(outline);
+        // Shell body, pointing along +x. Tip at +7, tail at -5.
+        g.beginFill(bodyColor).drawRoundRect(-5, -2, 8, 4, 1);
+        // Pointed tip.
+        g.beginFill(tipColor).moveTo(3, -2).lineTo(7, 0).lineTo(3, 2).closePath();
+        // Bright tracer at the tail.
+        g.endStroke().beginFill(tracer).drawCircle(-5, 0, 1.2);
         this.shape.x = this.x0;
         this.shape.y = this.y0;
+        this.shape.rotation = Math.atan2(vy, vx) * 180 / Math.PI;
         render.stage.addChild(this.shape);
     }
-    
+
     Bullet.prototype.updateState = function(t) {
         var dt = (t - this.creationTime) / 1000;
         if (dt < 0) {
@@ -710,6 +723,8 @@ window.onload = function () {
         }
         this.shape.x = (this.x0 + this.vx * dt) | 0;
         this.shape.y = (this.y0 + this.vy * dt + GRAV_ACC * dt * dt / 2) | 0;
+        var curVy = this.vy + GRAV_ACC * dt;
+        this.shape.rotation = Math.atan2(curVy, this.vx) * 180 / Math.PI;
     }
 
     var MAX_LEADERS = 10;
