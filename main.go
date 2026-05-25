@@ -353,6 +353,16 @@ func gameLoop(net *Network) {
     spaceMode := false
     var newMovablesPos map[uint32]float64
 
+    // mapBitmapBufferCopy holds the run-length-archived current map.
+    // The same backing slice is referenced by every queued copy in any
+    // client's outgoing channel, so we can only rebuild it (and thus
+    // allocate fresh storage) when the underlying mapBitmap has
+    // actually changed. We detect changes via numGroundDestroyed deltas
+    // (set by explodeAt) and an explicit dirty after a map swap.
+    var mapBitmapBufferCopy []byte
+    lastArchivedDestroyed := -1
+    mapDirty := true
+
     // TODO(vbo): load from predesigned file?
     // TODO(vbo): we need precomputed surface normals for:
     //  - grenades bouncing
@@ -410,12 +420,18 @@ func gameLoop(net *Network) {
             prevMemStats = memStats
         }
 
-        // Make a GC-ed copy of the mapBitmap to respond to connects
-        // TODO: can we allocate the space just once and reuse it?
-        mapBitmapBufferCopy := make([]byte, len(mapBitmapBuffer))
-        mapBitmapBufferCopy[0] = mapBitmapBuffer[0]
-        mapArchiveSize := archiveMap(mapBitmapBuffer[1:], mapBitmapBufferCopy[1:])
-        mapBitmapBufferCopy = mapBitmapBufferCopy[0:mapArchiveSize + 1]
+        // Rebuild the archived map snapshot only when the terrain has
+        // actually changed. Otherwise reuse the previous buffer: it is
+        // immutable until the next dirty rebuild, so it's safe for any
+        // outgoing queue still holding a reference.
+        if mapDirty || numGroundDestroyed != lastArchivedDestroyed {
+            buf := make([]byte, len(mapBitmapBuffer))
+            buf[0] = mapBitmapBuffer[0]
+            mapArchiveSize := archiveMap(mapBitmapBuffer[1:], buf[1:])
+            mapBitmapBufferCopy = buf[0:mapArchiveSize + 1]
+            mapDirty = false
+            lastArchivedDestroyed = numGroundDestroyed
+        }
 
         // Handle incoming messages
         select {
@@ -632,6 +648,7 @@ func gameLoop(net *Network) {
                 newMapBitmap = nil
                 newMapBitmapArchive = nil
                 numGroundDestroyed = 0
+                mapDirty = true
                 log.Println("Trasfer finished")
 
                 mapChangeMsg := createMsg(MSG_OUT_MAP_CHANGE, startTime, 1)
