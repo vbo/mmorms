@@ -359,7 +359,7 @@ window.onload = function () {
     var labelOverlay = document.createElement("div");
     labelOverlay.id = "labelOverlay";
     labelOverlay.style.cssText =
-        "position: fixed; left: 0; top: 0; width: 0; height: 0;" +
+        "position: absolute; left: 0; top: 0; width: 0; height: 0;" +
         " pointer-events: none; z-index: 10;" +
         " font-family: 'Black Ops One', 'Russo One', 'Impact', sans-serif;" +
         " -webkit-font-smoothing: antialiased;";
@@ -874,7 +874,7 @@ window.onload = function () {
     var leaderboardEl = document.createElement("div");
     leaderboardEl.id = "leaderboardEl";
     leaderboardEl.style.cssText =
-        "position: fixed; box-sizing: border-box;" +
+        "position: absolute; box-sizing: border-box;" +
         " display: none; pointer-events: none; z-index: 10;" +
         " background: rgba(34, 41, 27, 0.78);" +
         " border: 2px solid #6b6f3a;" +
