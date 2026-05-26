@@ -568,6 +568,33 @@ window.onload = function () {
         return Math.atan(slope) * 180 / Math.PI;
     }
 
+    function triggerScreenShake(durationMs) {
+        var canvas = document.getElementById('gameCanvas');
+        if (!canvas) { return; }
+        var now = performance.now();
+        var wasRunning = triggerScreenShake.endTime && now < triggerScreenShake.endTime;
+        triggerScreenShake.endTime = Math.max(triggerScreenShake.endTime || 0, now + durationMs);
+        triggerScreenShake.totalDuration = durationMs;
+        if (wasRunning) { return; }
+        var MAX_OFFSET_PX = 14;
+        var tick = function () {
+            var t = performance.now();
+            var remaining = triggerScreenShake.endTime - t;
+            if (remaining <= 0) {
+                canvas.style.transform = '';
+                triggerScreenShake.endTime = 0;
+                return;
+            }
+            var intensity = Math.min(1, remaining / triggerScreenShake.totalDuration);
+            var amp = MAX_OFFSET_PX * intensity;
+            var dx = (Math.random() * 2 - 1) * amp;
+            var dy = (Math.random() * 2 - 1) * amp;
+            canvas.style.transform = 'translate(' + dx.toFixed(2) + 'px, ' + dy.toFixed(2) + 'px)';
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }
+
     function Tank (x, y, hp, angle, shield, shieldPercent, direction, clientId) {
         this.x = x;
         this.y = y;
@@ -688,6 +715,7 @@ window.onload = function () {
         this.x = x;
         this.y = y;
         if (me() && me().clientId == this.clientId && hp < this.hp) {
+            triggerScreenShake(3000);
             var hurtScreen = new createjs.Shape();
             hurtScreen.graphics.beginFill("red").drawRect(0,0, WIDTH, HEIGHT);
             hurtScreen.alpha = 0.1;
