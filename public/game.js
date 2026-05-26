@@ -715,7 +715,7 @@ window.onload = function () {
         this.x = x;
         this.y = y;
         if (me() && me().clientId == this.clientId && hp < this.hp) {
-            triggerScreenShake(1500);
+            triggerScreenShake(750);
             var hurtScreen = new createjs.Shape();
             hurtScreen.graphics.beginFill("red").drawRect(0,0, WIDTH, HEIGHT);
             hurtScreen.alpha = 0.1;
