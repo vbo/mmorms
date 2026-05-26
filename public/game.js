@@ -569,7 +569,7 @@ window.onload = function () {
         triggerScreenShake.endTime = Math.max(triggerScreenShake.endTime || 0, now + durationMs);
         triggerScreenShake.totalDuration = durationMs;
         if (wasRunning) { return; }
-        var MAX_OFFSET_PX = 14;
+        var MAX_OFFSET_PX = Math.max(3, (window.innerWidth || 1260) * 0.011);
         var tick = function () {
             var t = performance.now();
             var remaining = triggerScreenShake.endTime - t;
