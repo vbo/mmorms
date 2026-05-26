@@ -380,13 +380,6 @@ window.onload = function () {
         return "#ff5050";
     }
 
-    function escapeHtml(s) {
-        return String(s)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-    }
-
     var labelMetrics = { scale: 1, offsetX: 0, offsetY: 0 };
     function updateLabelMetrics() {
         var canvas = document.getElementById("gameCanvas");
@@ -642,13 +635,21 @@ window.onload = function () {
         this.nickLabelEl.style.cssText =
             "position: absolute; left: 0; top: 0;" +
             " color: #f0e6c0;" +
-            " text-align: center; white-space: nowrap;" +
+            " display: flex; justify-content: center; align-items: baseline;" +
+            " white-space: nowrap;" +
             " letter-spacing: 0.06em;" +
             " text-shadow: " + LABEL_OUTLINE + ";" +
-            " overflow: hidden; text-overflow: ellipsis;" +
             " transform: translate(-9999px, -9999px);" +
             " transform-origin: 0 0; will-change: transform;";
-        this.nickLabelEl.textContent = "Tank" + clientId;
+        this.nickNameEl = document.createElement("span");
+        this.nickNameEl.style.cssText =
+            "flex: 0 1 auto; min-width: 0;" +
+            " overflow: hidden; text-overflow: ellipsis;";
+        this.nickNameEl.textContent = "Tank" + clientId;
+        this.nickLabelEl.appendChild(this.nickNameEl);
+        this.nickStarsEl = document.createElement("span");
+        this.nickStarsEl.style.cssText = "flex: 0 0 auto; color: #ffd54a;";
+        this.nickLabelEl.appendChild(this.nickStarsEl);
         labelOverlay.appendChild(this.nickLabelEl);
 
         this.shape.addChild(this.gun);
@@ -791,12 +792,10 @@ window.onload = function () {
         if (this.nickLabelEl) {
             var isMe = (typeof me === "function") && (this === me());
             this.nickLabelEl.style.color = isMe ? "#ffd84a" : "#f0e6c0";
-            var html = escapeHtml(baseName);
-            if (stars) {
-                html += ' <span style="color: #ffd54a">' +
-                    stars + "</span>";
-            }
-            this.nickLabelEl.innerHTML = html;
+            this.nickNameEl.textContent = baseName;
+            this.nickStarsEl.textContent = stars;
+            // Add a small gap before stars only when there are stars.
+            this.nickStarsEl.style.paddingLeft = stars ? "0.3em" : "0";
         }
     }
 
