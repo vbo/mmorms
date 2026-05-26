@@ -865,66 +865,99 @@ window.onload = function () {
     var LB_PANEL_X = 5;
     var LB_PANEL_Y = 0;
     var LB_PANEL_W = 220;
-    var LB_PANEL_H = 30 + (MAX_LEADERS + 1) * 14;
     var LB_FONT = "'Black Ops One', 'Stencil Std', 'Impact', sans-serif";
     var LB_TEXT_COLOR = "#f0e6c0";
     var LB_TITLE_COLOR = "#ffd84a";
 
-    var leaderBoardPanel = new createjs.Shape();
-    leaderBoardPanel.graphics
-        .beginFill("rgba(34, 41, 27, 0.78)")
-        .setStrokeStyle(2)
-        .beginStroke("#6b6f3a")
-        .drawRect(LB_PANEL_X, LB_PANEL_Y, LB_PANEL_W, LB_PANEL_H);
-    // Inner accent stripe for a stenciled-metal feel.
-    leaderBoardPanel.graphics
-        .setStrokeStyle(1)
-        .beginStroke("rgba(220, 210, 140, 0.35)")
-        .drawRect(LB_PANEL_X + 4, LB_PANEL_Y + 4, LB_PANEL_W - 8, LB_PANEL_H - 8);
-    leaderBoardPanel.visible = false;
-    render.stage.addChild(leaderBoardPanel);
-
-    var leaderBoardTitle = new createjs.Text("// LEADERBOARD //", "bold 14px " + LB_FONT, LB_TITLE_COLOR);
-    leaderBoardTitle.visible = false;
-    leaderBoardTitle.y = 8;
-    leaderBoardTitle.x = LB_PANEL_X + 22;
-    render.stage.addChild(leaderBoardTitle);
-    var leaderboardNickLines = [];
-    var leaderboardFragLines = [];
+    // Leaderboard is rendered as an HTML overlay (rather than on the
+    // canvas) so the text stays crisp on big screens, same as HP/nick labels.
+    var leaderboardEl = document.createElement("div");
+    leaderboardEl.id = "leaderboardEl";
+    leaderboardEl.style.cssText =
+        "position: fixed; box-sizing: border-box;" +
+        " display: none; pointer-events: none; z-index: 10;" +
+        " background: rgba(34, 41, 27, 0.78);" +
+        " border: 2px solid #6b6f3a;" +
+        " font-family: " + LB_FONT + ";" +
+        " -webkit-font-smoothing: antialiased;";
+    // Inner stenciled-metal stripe.
+    var leaderboardStripeEl = document.createElement("div");
+    leaderboardStripeEl.style.cssText =
+        "position: absolute; left: 2px; right: 2px; top: 2px; bottom: 2px;" +
+        " border: 1px solid rgba(220, 210, 140, 0.35); pointer-events: none;";
+    leaderboardEl.appendChild(leaderboardStripeEl);
+    var leaderboardContentEl = document.createElement("div");
+    leaderboardContentEl.style.cssText = "position: relative;";
+    leaderboardEl.appendChild(leaderboardContentEl);
+    var leaderboardTitleEl = document.createElement("div");
+    leaderboardTitleEl.textContent = "// LEADERBOARD //";
+    leaderboardTitleEl.style.cssText =
+        "color: " + LB_TITLE_COLOR + "; font-weight: bold;" +
+        " text-align: center; letter-spacing: 0.06em;";
+    leaderboardContentEl.appendChild(leaderboardTitleEl);
+    var leaderboardRowEls = [];
+    var leaderboardNickEls = [];
+    var leaderboardFragEls = [];
     for (var i = 0; i <= MAX_LEADERS; i++) {
-        var line = new createjs.Text("", "13px " + LB_FONT, LB_TEXT_COLOR);
-        var yOffset = 30 + i*14;
-        var nickWidth = 150;
-        line.y = yOffset;
-        line.x = LB_PANEL_X + 10;
-        line.lineWidth = nickWidth;
-        render.stage.addChild(line);
-        leaderboardNickLines[i] = line;
-
-        line = new createjs.Text("", "13px " + LB_FONT, LB_TITLE_COLOR);
-        line.y = yOffset;
-        line.x = LB_PANEL_X + nickWidth + 20;
-        render.stage.addChild(line);
-        leaderboardFragLines[i] = line;
+        var row = document.createElement("div");
+        row.style.cssText =
+            "display: none; justify-content: space-between;" +
+            " white-space: nowrap; letter-spacing: 0.03em;";
+        var nick = document.createElement("span");
+        nick.style.cssText =
+            "color: " + LB_TEXT_COLOR + ";" +
+            " overflow: hidden; text-overflow: ellipsis;" +
+            " padding-right: 0.5em;";
+        var frag = document.createElement("span");
+        frag.style.cssText = "color: " + LB_TITLE_COLOR + "; flex-shrink: 0;";
+        row.appendChild(nick);
+        row.appendChild(frag);
+        leaderboardContentEl.appendChild(row);
+        leaderboardRowEls[i] = row;
+        leaderboardNickEls[i] = nick;
+        leaderboardFragEls[i] = frag;
     }
+    labelOverlay.appendChild(leaderboardEl);
+
+    function layoutLeaderboard() {
+        var s = labelMetrics.scale;
+        leaderboardEl.style.left =
+            (labelMetrics.offsetX + LB_PANEL_X * s) + "px";
+        leaderboardEl.style.top =
+            (labelMetrics.offsetY + LB_PANEL_Y * s) + "px";
+        leaderboardEl.style.width = (LB_PANEL_W * s) + "px";
+        leaderboardContentEl.style.padding =
+            (8 * s) + "px " + (10 * s) + "px";
+        leaderboardTitleEl.style.fontSize = (14 * s) + "px";
+        leaderboardTitleEl.style.marginBottom = (4 * s) + "px";
+        var rowFont = (13 * s) + "px";
+        var rowHeight = (14 * s) + "px";
+        for (var i = 0; i <= MAX_LEADERS; i++) {
+            leaderboardRowEls[i].style.fontSize = rowFont;
+            leaderboardRowEls[i].style.lineHeight = rowHeight;
+        }
+    }
+    layoutLeaderboard();
+    window.addEventListener("resize", layoutLeaderboard);
 
     function updateLeaderboard(entries) {
         entries.sort(LeaderboardEntry.compare);
-        for (var i = 0; i < MAX_LEADERS; i++) {
-            leaderboardNickLines[i].text = "";
-            leaderboardFragLines[i].text = "";
-        }
-        leaderBoardTitle.visible = false;
-        leaderBoardPanel.visible = false;
-        for (var i = 0; i <= Math.min(entries.length, MAX_LEADERS); i++) {
+        var anyVisible = false;
+        for (var i = 0; i <= MAX_LEADERS; i++) {
             var leader = entries[i];
             if (leader && leader.frags != 0) {
-                leaderBoardTitle.visible = true;
-                leaderBoardPanel.visible = true;
-                leaderboardNickLines[i].text = "#" + i + "    " + leader.name.substring(0,12);
-                leaderboardFragLines[i].text = leader.frags;
+                anyVisible = true;
+                leaderboardNickEls[i].textContent =
+                    "#" + i + "    " + leader.name.substring(0, 12);
+                leaderboardFragEls[i].textContent = leader.frags;
+                leaderboardRowEls[i].style.display = "flex";
+            } else {
+                leaderboardNickEls[i].textContent = "";
+                leaderboardFragEls[i].textContent = "";
+                leaderboardRowEls[i].style.display = "none";
             }
         }
+        leaderboardEl.style.display = anyVisible ? "block" : "none";
     }
 
     function dearchive(mapBitmapArchive) {
